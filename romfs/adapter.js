@@ -65,7 +65,10 @@ async function prepare(stream) {
 
 const provider = {
   async home(page = 1, type = 'comic') {
-    if(type==='comic'){const r=await appSearchPage('热门',19,page,24);return {items:cards(r.list),page,hasMore:r.hasMore};}
+    if(type==='comic'){
+      try {const r=await appSearchPage('热门',19,page,24);return {items:cards(r.list),page,hasMore:r.hasMore};}
+      catch (_) {const r=await rankPage('hot-comic-drama',page);return {items:cards(r.list),page,hasMore:page<Math.min(Number(r.pagination.totalPages||1),100)};}
+    }
     const data = await api.categoryPage('tab=1&sort_type=1',page);
     const section = data?.loaderData?.category_page || data?.loaderData?.['category_$'];
     const rows = section?.recommendList || section?.categoryData?.recommendList;
