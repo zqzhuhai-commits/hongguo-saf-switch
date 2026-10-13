@@ -71,3 +71,5 @@ MPV / FFmpeg 和其他 portlibs 的许可证依其实际构建配置提供；构
 允许明文 MP4 的 moov 位于文件尾或 free/mdat 之后；媒体 Range 校验起点、终点和总长，允许最后一段短于请求长度。分段下载失败先重试同一段一次；APP 资源主地址不可用时尝试接口提供的备用地址和其他兼容清晰度（最多三档）。官网视频严格匹配分集 ID，避免把推荐视频当作本集。测试覆盖上述传输与解析场景；未完成新增版本的 Switch 实机验证，内容源不返回播放地址时仍可能失败。
 
 参考文件 tv.nro 的静态检查记录见 [播放器检查](docs/player-reference.md)。
+
+0.1.5 另修正官网首集的 canonical schema 匹配：首集页面 ID 可以是剧 ID，而分集身份从官网 `/video/public/<分集ID>/...mp4` 验证；首集使用 `/player/<剧ID>`，后续集使用双 ID 路由。官网媒体使用浏览器 User-Agent 和对应播放页 Referer。`tests/official_first_episode.cjs` 专门覆盖用户反馈的《首辅娇娘》第一集。

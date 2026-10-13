@@ -21,6 +21,8 @@ jobs:
         run: |
           cmake -S . -B build -DPLATFORM_SWITCH=ON -DCMAKE_BUILD_TYPE=Release
           cmake --build build --target package-input -j2
+      - name: Probe official first episode from the user report
+        run: python3 scripts/probe-official-player.py
       - name: Inspect binaries and package inputs
         run: |
           test -s build/package/exefs/main
@@ -37,6 +39,7 @@ jobs:
           path: |
             build/package/
             build/hongguo-switch.nro
+            build/official-player-probe.json
           retention-days: 7
 
       - name: Preserve exact build symbols for crash reports

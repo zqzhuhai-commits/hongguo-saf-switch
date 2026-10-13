@@ -4,7 +4,7 @@ const api={categoryPage,itemToCard,routerData,getText,appSearchPage,appSearchPar
 api.remoteRange=async(stream,start,end)=>{
   let error;
   for(let attempt=0;attempt<2;attempt++)try{
-    const resp=await axios(stream.url,{headers:{'User-Agent':VIDEO_UA,Referer:'https://novel.snssdk.com/',Range:`bytes=${start}-${end}`,'Accept-Encoding':'identity'},responseType:'arraybuffer'});
+    const resp=await axios(stream.url,{headers:{'User-Agent':VIDEO_UA,Referer:'https://novel.snssdk.com/',...stream.headers,Range:`bytes=${start}-${end}`,'Accept-Encoding':'identity'},responseType:'arraybuffer'});
     let data=Buffer.from(resp.data),total;
     if(resp.status===206){
       const match=String(resp.headers['content-range']||'').match(/^bytes (\d+)-(\d+)\/(\d+)$/i);
@@ -26,6 +26,7 @@ const validId=id=>typeof id==='string'&&/^\d{1,30}$/.test(id);
 const card=row=>({id:String(row.url),title:String(row.title||''),cover:String(row.img||''),description:String(row.content||''),badge:String(row.desc||''),tags:String(row.tname||'')});
 const cards=rows=>[...new Map(Array.from(rows,card).filter(r=>validId(r.id)&&r.title).map(r=>[r.id,r])).values()];
 const episodeSeries = new Map();
+const firstEpisodes = new Set();
 async function publicComicPage(page) {
   const html=await getText(`${SITE}/rank/hot-comic-drama?page=${page}`,{headers:{'User-Agent':'Mozilla/5.0','Referer':SITE+'/'}});
   for(const match of html.matchAll(/<script\b[^>]*data-fn-name="([^"]+)"[^>]*data-fn-args="([^"]+)"[^>]*>/g)) {
@@ -57,17 +58,21 @@ async function publicComicPage(page) {
 }
 async function publicWebStream(id) {
   const sid = episodeSeries.get(id) || '_';
-  const html = await api.getText(`${SITE}/player/${sid}/${id}`,{headers:{'User-Agent':'Mozilla/5.0','Referer':SITE+'/','Cache-Control':'no-cache'}});
+  const pageUrl=`${SITE}/player/${sid}${firstEpisodes.has(id)?'':'/'+id}`;
+  const html = await api.getText(pageUrl,{headers:{'User-Agent':'Mozilla/5.0','Referer':SITE+'/','Cache-Control':'no-cache'}});
   // The requested episode's public VideoObject is server rendered. Never take
   // a URL from an unrelated recommendation or an arbitrary HTML substring.
   for (const match of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
     let node; try { node=JSON.parse(match[1]); } catch (_) { continue; }
     for (const item of Array.isArray(node) ? node : node['@graph'] || [node]) {
       const episodeId=String(item.about?.['@id'] || item['@id'] || '').split(/[?#]/)[0].split('/').filter(Boolean).at(-1);
-      if (item['@type'] !== 'VideoObject' || episodeId!==id) continue;
       const url = String(item.contentUrl || '').replace(/&amp;/g,'&');
+      // First episodes use a canonical /player/<series> schema @id. Their
+      // /video/public/<episode>/... URL is the authoritative episode identity.
+      const publicEpisode=url.startsWith(`${SITE}/video/public/${id}/`)&&/\.mp4(?:[?#]|$)/i.test(url);
+      if (item['@type'] !== 'VideoObject' || (episodeId!==id&&!publicEpisode)) continue;
       if (!/^https:\/\//.test(url)) continue;
-      const stream = {url,key:null,quality:'官网',codec:'',source:'web'};
+      const stream = {url,key:null,quality:'官网',codec:'',source:'web',headers:{'User-Agent':'Mozilla/5.0',Referer:pageUrl}};
       await prepare(stream);
       return stream;
     }
@@ -186,7 +191,8 @@ const provider = {
     const episodes = Array.from(series.vid_list,(vid,index) => ({id:String(vid),number:index+1,title:`第 ${index+1} 集`}));
     if (episodes.some(e => !validId(e.id)) || new Set(episodes.map(e => e.id)).size !== episodes.length) throw new Error('分集数据异常');
     for (const episode of episodes) episodeSeries.set(episode.id,id);
-    while(episodeSeries.size>6000)episodeSeries.delete(episodeSeries.keys().next().value);
+    firstEpisodes.add(episodes[0].id);
+    while(episodeSeries.size>6000){const expired=episodeSeries.keys().next().value;episodeSeries.delete(expired);firstEpisodes.delete(expired);}
     return {...card(api.itemToCard(series)),id,episodes};
   },
   async stream(id, quality = 720, fresh = false) {
