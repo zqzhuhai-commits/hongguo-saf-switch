@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "poster.hpp"
+#include "workers.hpp"
 #include <curl/curl.h>
 #include <borealis/extern/nanovg/stb_image.h>
 #include <algorithm>
@@ -14,9 +15,10 @@ size_t receive(char* data,size_t size,size_t count,void* context) {
   d.bytes.insert(d.bytes.end(),data,data+n);return n;
 }
 }
-PosterPixels fetchPoster(const std::string& url,const std::atomic<bool>& alive) {
+PosterPixels fetchPoster(const std::string& address,const std::atomic<bool>& alive) {
+  std::string url=address;if(url.rfind("//",0)==0)url="https:"+url;else if(url.rfind("http://",0)==0)url="https://"+url.substr(7);
   PosterPixels result;
-  if(url.rfind("https://",0)!=0 || url.size()>8192 || !alive.load())return result;
+  if(url.rfind("https://",0)!=0 || url.size()>8192 || !alive.load()){trace("poster:invalid_or_cancelled");return result;}trace("poster:download_begin");
   std::unique_ptr<CURL,decltype(&curl_easy_cleanup)> curl(curl_easy_init(),curl_easy_cleanup);
   if(!curl)return result;
   Download d{{},&alive};auto* h=curl.get();
@@ -29,12 +31,12 @@ PosterPixels fetchPoster(const std::string& url,const std::atomic<bool>& alive) 
   curl_easy_setopt(h,CURLOPT_NOSIGNAL,1L);curl_easy_setopt(h,CURLOPT_FOLLOWLOCATION,1L);
   curl_easy_setopt(h,CURLOPT_MAXREDIRS,3L);curl_easy_setopt(h,CURLOPT_REDIR_PROTOCOLS,CURLPROTO_HTTPS);
   curl_easy_setopt(h,CURLOPT_WRITEFUNCTION,receive);curl_easy_setopt(h,CURLOPT_WRITEDATA,&d);
-  if(curl_easy_perform(h)!=CURLE_OK || !alive.load())return result;
-  long code=0;curl_easy_getinfo(h,CURLINFO_RESPONSE_CODE,&code);if(code!=200)return result;
-  int w=0,height=0,channels=0;
+  const auto status=curl_easy_perform(h);if(status!=CURLE_OK || !alive.load()){trace("poster:curl_error:"+std::to_string((int)status));return result;}trace("poster:download_complete");
+  long code=0;curl_easy_getinfo(h,CURLINFO_RESPONSE_CODE,&code);if(code!=200){trace("poster:http_error:"+std::to_string(code));return result;}
+  trace("poster:decode_begin");int w=0,height=0,channels=0;
   if(!stbi_info_from_memory(d.bytes.data(),(int)d.bytes.size(),&w,&height,&channels) || w<1 || height<1 || (int64_t)w*height>6*1024*1024)return result;
   std::unique_ptr<unsigned char,decltype(&stbi_image_free)> source(stbi_load_from_memory(d.bytes.data(),(int)d.bytes.size(),&w,&height,&channels,4),stbi_image_free);
-  if(!source || !alive.load())return result;
+  if(!source || !alive.load()){trace("poster:decode_failed");return result;}
   // Decode and resize in the worker; the UI only uploads a 104x156 texture.
   result.height=std::max(1,std::min(208,(int)std::lround(104.0*height/w)));
   result.rgba.resize(result.width*result.height*4);
@@ -44,5 +46,5 @@ PosterPixels fetchPoster(const std::string& url,const std::atomic<bool>& alive) 
     const float fx=sx-x0,fy=sy-y0;
     for(int c=0;c<4;c++)result.rgba[(y*result.width+x)*4+c]=(unsigned char)((1-fy)*((1-fx)*source.get()[(y0*w+x0)*4+c]+fx*source.get()[(y0*w+x1)*4+c])+fy*((1-fx)*source.get()[(y1*w+x0)*4+c]+fx*source.get()[(y1*w+x1)*4+c]));
   }
-  return result;
+  trace("poster:decode_complete");return result;
 }

@@ -20,7 +20,7 @@ add_library(qjs STATIC ${QJS}/quickjs.c ${QJS}/dtoa.c ${QJS}/libregexp.c ${QJS}/
 target_compile_definitions(qjs PRIVATE _GNU_SOURCE __SWITCH__ CONFIG_VERSION="2026-06-04")
 target_compile_options(qjs PRIVATE -fwrapv -O2)
 target_include_directories(qjs PUBLIC ${QJS})
-set(SRC native/main.cpp native/backend.cpp native/poster.cpp ${BOREALIS_LIBRARY}/lib/platforms/switch/switch_wrapper.c)
+set(SRC native/main.cpp native/backend.cpp native/poster.cpp native/workers.cpp ${BOREALIS_LIBRARY}/lib/platforms/switch/switch_wrapper.c)
 program_target(${PROJECT_NAME} "${SRC}")
 target_include_directories(${PROJECT_NAME} PRIVATE native ${BOREALIS_LIBRARY}/include/borealis/extern ${BOREALIS_LIBRARY}/lib/extern/glfw/include)
 target_compile_options(${PROJECT_NAME} PRIVATE -fexceptions -ffunction-sections -fdata-sections)
@@ -28,7 +28,7 @@ target_link_options(${PROJECT_NAME} PRIVATE -Wl,--gc-sections)
 target_link_libraries(${PROJECT_NAME} PRIVATE borealis qjs PkgConfig::MPV PkgConfig::CURL mbedtls mbedx509 mbedcrypto z ${APP_PLATFORM_LIB})
 add_custom_target(package-input DEPENDS ${PROJECT_NAME}
   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/package/exefs ${CMAKE_BINARY_DIR}/package/control
-  COMMAND ${NX_NACPTOOL_EXE} --create "${APP_TITLE}" "SAF contributors" "0.1.2" ${CMAKE_BINARY_DIR}/package/control/control.nacp --titleid=${PROJECT_TITLEID}
+  COMMAND ${NX_NACPTOOL_EXE} --create "${APP_TITLE}" "SAF contributors" "0.1.3" ${CMAKE_BINARY_DIR}/package/control/control.nacp --titleid=${PROJECT_TITLEID}
   COMMAND ${DEVKITPRO}/tools/bin/elf2nso ${PROJECT_NAME}.elf ${CMAKE_BINARY_DIR}/package/exefs/main
   COMMAND ${DEVKITPRO}/tools/bin/npdmtool ${CMAKE_CURRENT_SOURCE_DIR}/npdm.json ${CMAKE_BINARY_DIR}/package/exefs/main.npdm
   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/icon.jpg ${CMAKE_BINARY_DIR}/package/control/icon_AmericanEnglish.dat

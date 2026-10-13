@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "backend.hpp"
+#include "workers.hpp"
 #include <curl/curl.h>
 #include <mbedtls/md5.h>
 #include <mbedtls/sha512.h>
@@ -15,6 +16,7 @@
 #include <chrono>
 #include <cctype>
 #include <cstring>
+#include <future>
 
 std::vector<unsigned char> unhex(const std::string& s){
   if(s.size()%2||s.size()>32*1024*1024)throw std::runtime_error("Invalid binary length");
@@ -59,17 +61,23 @@ static JSValue httpFn(JSContext* c,JSValueConst,int argc,JSValueConst* argv){
 }
 void Backend::evaluate(const std::string& script,const char* name){JSValue value=JS_Eval(context,script.data(),script.size(),name,JS_EVAL_TYPE_GLOBAL);const bool failed=JS_IsException(value);JS_FreeValue(context,value);if(failed){JS_FreeValue(context,JS_GetException(context));throw std::runtime_error(std::string("Backend load failed: ")+name);}}
 Backend::Backend(){
-  runtime=JS_NewRuntime();if(!runtime)throw std::runtime_error("Runtime init");JS_SetMemoryLimit(runtime,256*1024*1024);JS_SetMaxStackSize(runtime,64*1024);context=JS_NewContext(runtime);if(!context)throw std::runtime_error("Context init");
+  runtime=JS_NewRuntime();if(!runtime)throw std::runtime_error("Runtime init");JS_SetMemoryLimit(runtime,256*1024*1024);JS_SetMaxStackSize(runtime,256*1024);context=JS_NewContext(runtime);if(!context)throw std::runtime_error("Context init");
   JSValue global=JS_GetGlobalObject(context);JS_SetPropertyStr(context,global,"__hash",JS_NewCFunction(context,hashFn,"__hash",2));JS_SetPropertyStr(context,global,"__aes",JS_NewCFunction(context,aesFn,"__aes",4));JS_SetPropertyStr(context,global,"__http",JS_NewCFunction(context,httpFn,"__http",4));JS_FreeValue(context,global);
   for(const char* file:{"deps.js","prelude.js","hongguo.cjs","adapter.js"}){std::ifstream in(std::string("romfs:/")+file);if(!in)throw std::runtime_error("Backend resource missing");std::string script((std::istreambuf_iterator<char>(in)),{});evaluate(script,file);}
 }
 Backend::~Backend(){if(context)JS_FreeContext(context);if(runtime)JS_FreeRuntime(runtime);}
 Json Backend::call(const std::string& function,const Json& args){
-  std::lock_guard<std::mutex> guard(lock);JS_UpdateStackTop(runtime);
+  if(!inApiWorker()){
+    auto task=std::make_shared<std::packaged_task<Json()>>([this,function,args]{return call(function,args);});
+    auto result=task->get_future();
+    if(!apiTask([task]{(*task)();}))throw std::runtime_error("后台任务已停止");
+    return result.get();
+  }
+  std::lock_guard<std::mutex> guard(lock);trace("api:"+function+":begin");JS_UpdateStackTop(runtime);
   if(function!="home"&&function!="search"&&function!="detail"&&function!="open"&&function!="read"&&function!="selftest")throw std::runtime_error("Invalid method");
   evaluate("globalThis.__done=false;globalThis.__answer='';Promise.resolve(SwitchAPI["+Json(function).dump()+"](..."+args.dump()+")).then(v=>{globalThis.__answer=JSON.stringify({ok:true,value:v});globalThis.__done=true;},e=>{globalThis.__answer=JSON.stringify({ok:false,message:String(e&&e.message||'接口处理失败').replace(/https?:\\/\\/[^ ]+/g,'[地址]').slice(0,180)});globalThis.__done=true;});","rpc");
   JSContext* job=nullptr;const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(120);
-  while(true){JSValue global=JS_GetGlobalObject(context);JSValue done=JS_GetPropertyStr(context,global,"__done");bool complete=JS_ToBool(context,done);JS_FreeValue(context,done);if(complete){JSValue answer=JS_GetPropertyStr(context,global,"__answer");std::string raw=text(context,answer);JS_FreeValue(context,answer);JS_FreeValue(context,global);Json result=Json::parse(raw);if(!result.value("ok",false))throw std::runtime_error(result.value("message",std::string("内容源或网络暂不可用")));return result["value"];}JS_FreeValue(context,global);
+  while(true){JSValue global=JS_GetGlobalObject(context);JSValue done=JS_GetPropertyStr(context,global,"__done");bool complete=JS_ToBool(context,done);JS_FreeValue(context,done);if(complete){JSValue answer=JS_GetPropertyStr(context,global,"__answer");std::string raw=text(context,answer);JS_FreeValue(context,answer);JS_FreeValue(context,global);Json result=Json::parse(raw);if(!result.value("ok",false))throw std::runtime_error(result.value("message",std::string("内容源或网络暂不可用")));trace("api:"+function+":complete");return result["value"];}JS_FreeValue(context,global);
     if(std::chrono::steady_clock::now()>deadline||JS_ExecutePendingJob(runtime,&job)<=0)throw std::runtime_error("接口处理失败");
   }
 }

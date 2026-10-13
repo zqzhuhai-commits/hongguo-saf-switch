@@ -1,18 +1,20 @@
 # 红果短剧Switch客户端
 
-Switch 第一代 / Lite / OLED 的原生自制应用。版本 0.1.2 为试验版。
+Switch 第一代 / Lite / OLED 的原生自制应用。版本 0.1.3 为诊断试验版。
 仓库名称为 `hongguo-switch`，软件内名称为「红果短剧」。图标沿用用户提供的图片。无需电脑端服务，使用 libnx、Borealis、QuickJS 和 libmpv。
 
-**0.1.2 试验版：修复进入列表项目时的页面栈崩溃，并重做首页内容布局。**
+**0.1.3 诊断试验版：固定后台线程、明确 2 MiB 栈空间，并加入实机阶段日志。**
 0.1.0 的 App 视频接口返回“未知异常”，本版优先读取官网指定分集的公开 MP4，保留 App 入口作为备用。
 用户已确认 0.1.0 在其大气层环境能够安装启动、获取短剧列表及分集。
 0.1.1 的短剧、漫剧封面均通过原生下载解码测试；两类各前两集通过分段读取及首秒音视频解码测试。
-0.1.1 在部分设备上点击列表项目会闪退；0.1.2 修正了 AppletFrame 页面栈初始化。0.1.2 尚待实机复测。
+用户反馈 0.1.2 启动约 3 秒后崩溃，首页封面未显示。0.1.3 将接口解析与封面解码改到独立的固定工作线程，所有接口请求都由同一线程执行。短剧与漫剧分别显示结果，封面仅下载可见区域的图片。该改动尚未通过 Switch 实机复测，崩溃根因仍需日志确认。
+
+每次启动会生成 `sdmc:/switch/hongguo-saf/runtime.log`，记录接口、页面构建、图片下载/解码/纹理上传的阶段。日志不含视频地址、密钥或账户内容。若仍崩溃，请在再次启动前保存日志，并提供最新的 `sdmc:/atmosphere/crash_reports/` 报告。
 
 ## 下载
 
-[NSP 直接下载](https://github.com/zqzhuhai-commits/hongguo-switch/releases/download/v0.1.2-alpha.1/Hongguo-Switch-0.1.2-alpha.1.nsp)
-· [发布说明及校验文件](https://github.com/zqzhuhai-commits/hongguo-switch/releases/tag/v0.1.2-alpha.1)
+[NSP 直接下载](https://github.com/zqzhuhai-commits/hongguo-switch/releases/download/v0.1.3-alpha.1/Hongguo-Switch-0.1.3-alpha.1.nsp)
+· [发布说明及校验文件](https://github.com/zqzhuhai-commits/hongguo-switch/releases/tag/v0.1.3-alpha.1)
 
 软件内名称为「红果短剧」。NSP 的 Title ID 为 `0100F00D53414600`。
 验证记录见 `docs/Switch-verification.json`。NSP 在本地打包，密钥未上传；GitHub 工作流仅发布完成的安装包。
