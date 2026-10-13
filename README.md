@@ -1,18 +1,18 @@
 # 红果短剧Switch客户端
 
-Switch 第一代 / Lite / OLED 的原生自制应用。版本 0.1.1 为试验版。
+Switch 第一代 / Lite / OLED 的原生自制应用。版本 0.1.2 为试验版。
 仓库名称为 `hongguo-switch`，软件内名称为「红果短剧」。图标沿用用户提供的图片。无需电脑端服务，使用 libnx、Borealis、QuickJS 和 libmpv。
 
-**0.1.1 试验版：已加入封面和官网公开视频播放入口。**
+**0.1.2 试验版：修复进入列表项目时的页面栈崩溃。**
 0.1.0 的 App 视频接口返回“未知异常”，本版优先读取官网指定分集的公开 MP4，保留 App 入口作为备用。
 用户已确认 0.1.0 在其大气层环境能够安装启动、获取短剧列表及分集。
 0.1.1 的短剧、漫剧封面均通过原生下载解码测试；两类各前两集通过分段读取及首秒音视频解码测试。
-实际 Switch 播放及操作仍待实机反馈。
+0.1.1 在部分设备上点击列表项目会闪退；0.1.2 修正了 AppletFrame 页面栈初始化。0.1.2 尚待实机复测。
 
 ## 下载
 
-[NSP 直接下载](https://github.com/zqzhuhai-commits/hongguo-switch/releases/download/v0.1.1-alpha.1/Hongguo-Switch-0.1.1-alpha.1.nsp)
-· [发布说明及校验文件](https://github.com/zqzhuhai-commits/hongguo-switch/releases/tag/v0.1.1-alpha.1)
+[NSP 直接下载](https://github.com/zqzhuhai-commits/hongguo-switch/releases/download/v0.1.2-alpha.1/Hongguo-Switch-0.1.2-alpha.1.nsp)
+· [发布说明及校验文件](https://github.com/zqzhuhai-commits/hongguo-switch/releases/tag/v0.1.2-alpha.1)
 
 软件内名称为「红果短剧」。NSP 的 Title ID 为 `0100F00D53414600`。
 验证记录见 `docs/Switch-verification.json`。NSP 在本地打包，密钥未上传；GitHub 工作流仅发布完成的安装包。

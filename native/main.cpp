@@ -48,8 +48,8 @@ public:
 static brls::Box* posterCell(const Json& row,std::function<void()> fn){auto* box=new brls::Box(brls::Axis::ROW);box->setHeight(172);box->setPadding(8);box->addView(new PosterImage(row.value("cover",std::string())));auto* text=cell(row.value("title",std::string()),row.value("badge",std::string()),std::move(fn));text->setGrow(1);box->addView(text);return box;}
 static std::mutex playbackErrorMutex;
 static std::string playbackErrorId,playbackError;
-class SceneFrame:public brls::AppletFrame {public:using brls::AppletFrame::setContentView;std::shared_ptr<bool> alive=std::make_shared<bool>(true);~SceneFrame(){*alive=false;}};
-static SceneFrame* frame(brls::Box* list,const std::string& title){auto* scroll=new brls::ScrollingFrame();scroll->setGrow(1);list->setPadding(20,50,30,50);scroll->setContentView(list);auto* f=new SceneFrame();f->setTitle(title);f->setContentView(scroll);back(f);return f;}
+class SceneFrame:public brls::AppletFrame {public:explicit SceneFrame(brls::View* root):brls::AppletFrame(root){}std::shared_ptr<bool> alive=std::make_shared<bool>(true);~SceneFrame(){*alive=false;}};
+static SceneFrame* frame(brls::Box* list,const std::string& title){auto* scroll=new brls::ScrollingFrame();scroll->setGrow(1);list->setPadding(20,50,30,50);scroll->setContentView(list);auto* f=new SceneFrame(scroll);f->setTitle(title);return f;}
 struct Reader{std::string id;int64_t total=0,pos=0,cacheAt=-1;std::vector<unsigned char> cache;std::atomic<bool> cancelled{false};};
 static int64_t readStream(void* data,char* out,uint64_t size){auto* r=(Reader*)data;if(r->cancelled)return -1;if(r->pos>=r->total)return 0;try{
   const int64_t start=(r->pos/(1024*1024))*(1024*1024);
@@ -126,7 +126,7 @@ static brls::View* home(){auto* list=new brls::Box(brls::Axis::COLUMN);list->add
   list->addView(cell("搜索短剧","使用系统键盘",[]{SwkbdConfig keyboard;if(R_FAILED(swkbdCreate(&keyboard,0)))return;swkbdConfigMakePresetDefault(&keyboard);swkbdConfigSetStringLenMax(&keyboard,80);swkbdConfigSetGuideText(&keyboard,"输入剧名");char text[512]={};Result result=swkbdShow(&keyboard,text,sizeof(text));swkbdClose(&keyboard);if(R_SUCCEEDED(result)&&text[0])brls::Application::pushActivity(new brls::Activity(new Page("search",Json::array({std::string(text),1,"short"}))));}));
   list->addView(cell("我的收藏","本机收藏列表",[]{auto* box=new brls::Box(brls::Axis::COLUMN);for(const auto& row:library["favorites"])box->addView(posterCell(row,[row]{showDetail(row);}));brls::Application::pushActivity(new brls::Activity(frame(box,"我的收藏")));}));
   list->addView(cell("最近观看","查看已观看剧集",[]{auto* box=new brls::Box(brls::Axis::COLUMN);for(const auto& row:library["history"]){const auto series=row.value("series",Json::object());box->addView(posterCell(series,[series]{showDetail(series);}));}brls::Application::pushActivity(new brls::Activity(frame(box,"最近观看")));}));
-  list->addView(cell("关于","Switch 原生试验版 0.1.1",[]{message("红果短剧\n原生自制应用，无需电脑中转。\n0.1.1 已加入封面及官网播放入口。\n用户已确认旧版能启动；新版播放待实机验证。\n网络错误会明确显示。GPL-3.0-only。");}));return frame(list,"红果短剧");
+  list->addView(cell("关于","Switch 原生试验版 0.1.2",[]{message("红果短剧\n原生自制应用，无需电脑中转。\n0.1.2 修复进入页面时的崩溃。\n实机操作与播放仍待验证。\n网络错误会明确显示。GPL-3.0-only。");}));return frame(list,"红果短剧");
 }
 int main(int,char**){curl_global_init(CURL_GLOBAL_DEFAULT);if(!brls::Application::init())return 1;brls::Application::createWindow("红果短剧");brls::Application::setGlobalQuit(true);load();
   try{backend=new Backend();const auto result=backend->call("selftest",Json::array());if(result.value("sm3",std::string())!="66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0")throw std::runtime_error("Self test");brls::Application::pushActivity(new brls::Activity(home()));}
