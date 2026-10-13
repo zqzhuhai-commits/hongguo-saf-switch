@@ -1,6 +1,6 @@
 {
   "name": "红果短剧",
-  "version": "0.1.8-alpha.1",
+  "version": "0.1.8",
   "titleId": "0100F00D53414600",
   "nspBytes": 21702360,
   "sha256": "4228c8d8e1415d53c5b9e11250cc7570f0b98e67bc81afbdd0bf17bc413cbd8c",
@@ -25,5 +25,9 @@
     "hintBottomAlignment": true,
     "hintBottomMarginLogicalPixels": 4
   },
-  "notes": "Native build, artifact integrity and NSP validation passed. Only the playback hints vertical position/alignment changes; font size, color and left margin are retained. Appearance awaits Switch hardware verification."
+  "notes": "Formal release approved by the user. Binary is unchanged from the verified 0.1.8 prerelease; original native build and NSP checks remain applicable. No developer Switch hardware test was performed.",
+  "releaseChannel": "stable",
+  "userApprovedFormalRelease": true,
+  "userApprovalDate": "2026-10-13",
+  "binaryUnchangedFrom": "v0.1.8-alpha.1"
 }
