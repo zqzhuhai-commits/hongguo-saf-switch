@@ -11,8 +11,8 @@ Switch 第一代 / Lite / OLED 的原生自制应用。版本 0.1.6 为试验版
 
 ## 下载
 
-[NSP 直接下载](https://github.com/zqzhuhai-commits/hongguo-switch/releases/download/v0.1.6-alpha.1/Hongguo-Switch-0.1.6-alpha.1.nsp)
-· [发布说明及校验文件](https://github.com/zqzhuhai-commits/hongguo-switch/releases/tag/v0.1.6-alpha.1)
+[NSP 直接下载](https://github.com/zqzhuhai-commits/hongguo-switch/releases/download/v0.1.7-alpha.1/Hongguo-Switch-0.1.7-alpha.1.nsp)
+· [发布说明及校验文件](https://github.com/zqzhuhai-commits/hongguo-switch/releases/tag/v0.1.7-alpha.1)
 
 软件内名称为「红果短剧」。NSP 的 Title ID 为 `0100F00D53414600`。
 验证记录见 `docs/Switch-verification.json`。NSP 在本地打包，密钥未上传；GitHub 工作流仅发布完成的安装包。
@@ -76,4 +76,8 @@ MPV / FFmpeg 和其他 portlibs 的许可证依其实际构建配置提供；构
 
 ### 0.1.6 播放交互
 
-底部常驻显示时间与进度条。触摸任意位置或拖动后松开跳转，拖动中显示目标时间，松开只提交一次跳转；进度条获得焦点后左右键每次前后 5 秒，上键打开菜单。未知时长或播放失败时禁用跳转。长按播放画面 400ms 临时使用 2 倍速，松开、取消、切集、重试、退出或暂停时恢复长按前的实际倍速；拖动进度条和点击菜单按钮不会触发倍速，短点仍开关菜单。新增交互待 Switch 实机验证。
+时间与进度条随控制菜单显示，进入播放时隐藏，点击画面或按 X 显示，再次点击画面、按 B 或选择“隐藏菜单”后隐藏。触摸任意位置或拖动后松开跳转，拖动中显示目标时间，松开只提交一次跳转；进度条获得焦点后左右键每次前后 5 秒，上键打开菜单。未知时长或播放失败时禁用跳转。长按播放画面 400ms 临时使用 2 倍速，松开、取消、切集、重试、退出或暂停时恢复长按前的实际倍速；拖动进度条和点击菜单按钮不会触发倍速，短点仍开关菜单。新增交互待 Switch 实机验证。
+
+### 0.1.7 进度条显示调整
+
+进度条不再常驻，与控制菜单同时显示或隐藏。隐藏后其原位置可正常点击画面或长按倍速，不会被不可见的进度条占用。
