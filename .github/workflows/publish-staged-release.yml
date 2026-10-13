@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: d204f5014e11abf8d582f104556f750e2fc0a893
+          ref: d84339b2ea8def6e53d4247db0d116730ab5e91f
           persist-credentials: false
       - name: Assemble and publish verified NSP
         env:
@@ -22,14 +22,14 @@ jobs:
           set -euo pipefail
           if [ ! -d .release-parts/nsp ]; then echo 'No staged package; nothing to publish.'; exit 0; fi
           mkdir -p /tmp/release
-          cat .release-parts/nsp/part-* > /tmp/release/Hongguo-Switch-0.1.4-alpha.1.nsp
+          cat .release-parts/nsp/part-* > /tmp/release/Hongguo-Switch-0.1.5-alpha.1.nsp
           cp .release-parts/Switch-verification.json /tmp/release/
           cd /tmp/release
-          sha256sum Hongguo-Switch-0.1.4-alpha.1.nsp > SHA256SUMS
+          sha256sum Hongguo-Switch-0.1.5-alpha.1.nsp > SHA256SUMS
           expected=$(python3 -c 'import json; print(json.load(open("Switch-verification.json"))["sha256"])')
-          actual=$(sha256sum Hongguo-Switch-0.1.4-alpha.1.nsp | cut -d' ' -f1)
+          actual=$(sha256sum Hongguo-Switch-0.1.5-alpha.1.nsp | cut -d' ' -f1)
           test "$expected" = "$actual"
-          gh release create v0.1.4-alpha.1 Hongguo-Switch-0.1.4-alpha.1.nsp SHA256SUMS Switch-verification.json \
+          gh release create v0.1.5-alpha.1 Hongguo-Switch-0.1.5-alpha.1.nsp SHA256SUMS Switch-verification.json \
             --repo "$GH_REPO" --target "$RELEASE_TARGET" \
-            --title '红果短剧Switch客户端 v0.1.4' --prerelease \
-            --notes '0.1.4：六列封面宫格、整张卡片触屏点击、中文缺字修正、每行十集横向选集。点击播放画面或按X呼出菜单，支持横竖切换、自动连播开关和手动重试。播放失败最多自动重试三次，并刷新播放源。构建、连播与重试逻辑检查和安装包校验通过；新界面与旋转仍待实机复测。部分内容源持续异常时仍可能无法播放。'
+            --title '红果短剧Switch客户端 v0.1.5' --prerelease \
+            --notes '0.1.5：修复官网首集 canonical 页面以整剧 ID 标识、而公开 MP4 以分集 ID 标识时，客户端误拒绝可播放地址的问题。首集使用官网 canonical 播放页，媒体请求使用网页 User-Agent 和 Referer。允许明文 MP4 尾部索引，媒体分段失败重试同一段，尝试备用 CDN 和兼容清晰度。首辅娇娘第一集的官网 metadata、公开 MP4 文件头与两个实际 HTTP Range 已通过 CI 检查；Node 与实际 QuickJS 回归、原生编译和 NSP 校验通过。保留宫格、触屏菜单、旋转、自动连播。仍待 Switch 实机复测；没有可用内容源的集数仍可能失败。'
