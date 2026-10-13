@@ -1,52 +1,22 @@
 {
   "name": "红果短剧",
-  "githubDisplayName": "红果短剧Switch客户端",
   "version": "0.1.2-alpha.1",
   "titleId": "0100F00D53414600",
-  "nspBytes": 21655768,
-  "sha256": "ccad681582830d36ab25843d632c0098f2ce0b3306e740b216920d81fe8db3f1",
-  "nativeArchitecture": "AArch64",
+  "nspBytes": 21660888,
+  "sha256": "d4fc747a1824047ed7e86444c8cbd4d3966795a6bae75c3eb26a7007d0e3ab02",
   "ncaTypes": [
-    0,
+    1,
     2,
-    1
+    0
   ],
   "containerChecksPassed": true,
   "privateKeyScanPassed": true,
-  "sourceCommit": "f1c1a3c806f524c023bf50fe04005d0fee6d1406",
+  "sourceCommit": "bf9690f3e9d204dfc7a9cad107114882e47f173f",
+  "hardwareTested": false,
+  "validation": "NSP PFS0 entries, NCA content hashes, decrypted NCA headers, title IDs, app/control/meta types, and embedded key scan",
+  "githubDisplayName": "红果短剧Switch客户端",
+  "nativeArchitecture": "AArch64",
   "hardwareTestedByDeveloper": false,
-  "userReportedPreviousVersionLaunchAndCatalogWorking": true,
   "onDevicePlaybackVerified": false,
-  "localTests": {
-    "shortCatalogRows": 24,
-    "shortEpisodeCount": 69,
-    "comicCatalogRows": 20,
-    "comicEpisodeCount": 222,
-    "shortCoverDecoded": true,
-    "comicCoverDecoded": true,
-    "nativeBackendRangeChecksPassed": true,
-    "samples": [
-      {
-        "sample": "comic-episode-1",
-        "audioVideoDecodeExit": 0,
-        "decoderErrorLines": 0
-      },
-      {
-        "sample": "comic-episode-2",
-        "audioVideoDecodeExit": 0,
-        "decoderErrorLines": 0
-      },
-      {
-        "sample": "short-episode-1",
-        "audioVideoDecodeExit": 0,
-        "decoderErrorLines": 0
-      },
-      {
-        "sample": "short-episode-2",
-        "audioVideoDecodeExit": 0,
-        "decoderErrorLines": 0
-      }
-    ],
-    "hardwarePlaybackVerified": false
-  }
+  "notes": "The user reported v0.1.1 launched and loaded catalogs, but crashed when entering any item. v0.1.2 fixes AppletFrame stack initialization and refreshes the home dashboard. Hardware retest remains pending."
 }

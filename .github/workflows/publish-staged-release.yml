@@ -15,6 +15,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          if [ ! -d .release-parts/nsp ]; then echo 'No staged package; nothing to publish.'; exit 0; fi
           mkdir -p /tmp/release
           cat .release-parts/nsp/part-* > /tmp/release/Hongguo-Switch-0.1.2-alpha.1.nsp
           cp .release-parts/Switch-verification.json /tmp/release/
