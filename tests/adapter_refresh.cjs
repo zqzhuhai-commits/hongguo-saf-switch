@@ -7,7 +7,7 @@ const ctx={Buffer,Date,Math,console,SITE:'https://example.test',nativeCrypto:req
 for(const name of source.match(/^const api=\{([^}]+)\}/)[1].split(','))ctx[name]=()=>{throw Error('unexpected '+name);};
 for(const name of ['streamCache','videoInfoCache','pageCache','appSearchCache'])ctx[name]=new Map();
 ctx.getText=async()=>{requests++;if(fail)throw Error('temporary network error');return `<script type="application/ld+json">${JSON.stringify({'@type':'VideoObject',about:{'@id':'https://example.test/player/0/1'},contentUrl:'https://example.test/fresh.mp4'})}</script>`;};
-ctx.remoteRange=async()=>({data:bytes,total:bytes.length});
+ctx.VIDEO_UA='test';ctx.axios=async(_url,opts)=>{const [a,b]=opts.headers.Range.slice(6).split('-').map(Number);const end=Math.min(b,bytes.length-1);return {status:206,headers:{'content-range':`bytes ${a}-${end}/${bytes.length}`},data:bytes.subarray(a,end+1)};};
 ctx.fetchVideoInfo=async()=>{throw Error('video_model failed: 未知异常');};
 ctx.streamCache.set('1|desktop-480',{time:Date.now(),value:{url:'https://example.test/stale.mp4',quality:'cached',prepared:{total:16,header:bytes,samples:[]}}});
 vm.createContext(ctx);vm.runInContext(source,ctx);

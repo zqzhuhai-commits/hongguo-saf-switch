@@ -1,4 +1,27 @@
 const api={categoryPage,itemToCard,routerData,getText,appSearchPage,appSearchParams,signedAppGet,appSearchCells,appSearchVod,fetchVideoInfo,qualityNumber,qualityLabel,decryptSpadeUrl,deriveContentKey,remoteRange,prepareCencHeader,decryptPartial,streamCache,videoInfoCache,pageCache,appSearchCache};
+// Retry the same byte range before ending playback. Validate the offset as well
+// as its length: a CDN may return a full file or a truncated final range.
+api.remoteRange=async(stream,start,end)=>{
+  let error;
+  for(let attempt=0;attempt<2;attempt++)try{
+    const resp=await axios(stream.url,{headers:{'User-Agent':VIDEO_UA,Referer:'https://novel.snssdk.com/',Range:`bytes=${start}-${end}`,'Accept-Encoding':'identity'},responseType:'arraybuffer'});
+    let data=Buffer.from(resp.data),total;
+    if(resp.status===206){
+      const match=String(resp.headers['content-range']||'').match(/^bytes (\d+)-(\d+)\/(\d+)$/i);
+      if(!match)throw new Error('媒体 Range 响应缺少位置');
+      const a=Number(match[1]),b=Number(match[2]);total=Number(match[3]);
+      if(!Number.isSafeInteger(total)||total<=0||a!==start||b!==Math.min(end,total-1)||data.length!==b-a+1)throw new Error('媒体 Range 位置异常');
+    }else if(resp.status===200){
+      total=Number(resp.headers['content-length']||data.length);
+      if(!Number.isSafeInteger(total)||total!==data.length)throw new Error('媒体完整响应长度异常');
+      data=data.subarray(start,Math.min(end+1,total));
+    }else throw new Error('媒体响应异常');
+    if(start>=total||data.length!==Math.min(end,total-1)-start+1)throw new Error('媒体 Range 长度异常');
+    if(stream.total&&total!==stream.total)throw new Error('媒体文件长度发生变化');
+    stream.total=total;return {data,total};
+  }catch(e){error=e;}
+  throw error;
+};
 const validId=id=>typeof id==='string'&&/^\d{1,30}$/.test(id);
 const card=row=>({id:String(row.url),title:String(row.title||''),cover:String(row.img||''),description:String(row.content||''),badge:String(row.desc||''),tags:String(row.tname||'')});
 const cards=rows=>[...new Map(Array.from(rows,card).filter(r=>validId(r.id)&&r.title).map(r=>[r.id,r])).values()];
@@ -40,14 +63,12 @@ async function publicWebStream(id) {
   for (const match of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
     let node; try { node=JSON.parse(match[1]); } catch (_) { continue; }
     for (const item of Array.isArray(node) ? node : node['@graph'] || [node]) {
-      if (item['@type'] !== 'VideoObject' || !String(item.about?.['@id'] || item['@id'] || '').includes(id)) continue;
+      const episodeId=String(item.about?.['@id'] || item['@id'] || '').split(/[?#]/)[0].split('/').filter(Boolean).at(-1);
+      if (item['@type'] !== 'VideoObject' || episodeId!==id) continue;
       const url = String(item.contentUrl || '').replace(/&amp;/g,'&');
       if (!/^https:\/\//.test(url)) continue;
       const stream = {url,key:null,quality:'官网',codec:'',source:'web'};
-      const first=await api.remoteRange(stream,0,256*1024-1);
-      const bytes=Buffer.from(first.data);
-      if (bytes.indexOf(Buffer.from('encv')) >= 0 || bytes.indexOf(Buffer.from('enca')) >= 0) throw new Error('官网资源不是明文 MP4');
-      stream.initial = first;
+      await prepare(stream);
       return stream;
     }
   }
@@ -78,6 +99,27 @@ async function prepare(stream) {
     delete stream.initial;
     let head = Buffer.from(first.data); const total = first.total;
     if (!Number.isSafeInteger(total) || total < head.length || head.length < 16 || head.toString('ascii',4,8) !== 'ftyp') throw new Error('视频头格式异常');
+    if(!stream.key){
+      // Plain MP4 files can place free/mdat before moov or put the index at EOF.
+      // Walk top-level boxes using small range reads, without downloading mdat.
+      let offset=0,moov;
+      for(let count=0;offset<total&&count<128;count++){
+        const prefix=offset+16<=head.length?head.subarray(offset,offset+16):Buffer.from((await api.remoteRange(stream,offset,Math.min(offset+15,total-1))).data);
+        if(prefix.length<8)throw new Error('MP4 box 头不完整');
+        let size=prefix.readUInt32BE(0);const type=prefix.toString('ascii',4,8);
+        if(size===1){if(prefix.length<16)throw new Error('MP4 扩展 box 头不完整');size=Number(prefix.readBigUInt64BE(8));}
+        else if(size===0)size=total-offset;
+        if(!Number.isSafeInteger(size)||size<(prefix.readUInt32BE(0)===1?16:8)||offset+size>total)throw new Error('MP4 box 长度异常');
+        if(type==='moov'){
+          if(size>8*1024*1024)throw new Error('视频索引超出限制');
+          moov=offset+size<=head.length?head.subarray(offset,offset+size):Buffer.from((await api.remoteRange(stream,offset,offset+size-1)).data);break;
+        }
+        offset+=size;
+      }
+      if(!moov)throw new Error('MP4 缺少视频索引');
+      if(moov.indexOf(Buffer.from('encv'))>=0||moov.indexOf(Buffer.from('enca'))>=0)throw new Error('视频不是明文 MP4');
+      return stream.prepared={total,header:Buffer.alloc(0),samples:[]};
+    }
     const ftypSize = head.readUInt32BE(0);
     if (ftypSize < 8 || ftypSize + 8 > head.length || head.toString('ascii',ftypSize+4,ftypSize+8) !== 'moov') throw new Error('视频索引格式异常');
     const moovSize = head.readUInt32BE(ftypSize), end = ftypSize + moovSize;
@@ -153,6 +195,7 @@ const provider = {
     if (fresh) {api.streamCache.delete(key); api.videoInfoCache.delete(id);}
     let stream = api.streamCache.get(key);
     if (!stream || Date.now()-stream.time>=240000) {
+      stream=null;
       let web;
       try { web=await publicWebStream(id); } catch (_) {}
       if (web) {
@@ -162,13 +205,21 @@ const provider = {
       const compatible = Array.from(rows).filter(row => !['bytevc2','bvc2'].includes(String(row.item.codec_type || '').toLowerCase()));
       const avc = compatible.filter(row => /^(avc|h264|h\.264|avc1)$/i.test(String(row.item.codec_type || '')));
       const pool = avc.length ? avc : compatible;
-      const selected = pool.find(row => api.qualityNumber(row.quality)<=quality) || pool.at(-1);
-      if (!selected) throw new Error('没有兼容的播放资源');
-      let url = String(selected.item.main_url);
+      const preferred=pool.filter(row=>api.qualityNumber(row.quality)<=quality);
+      const candidates=[...preferred,...pool.filter(row=>!preferred.includes(row))];
+      if (!candidates.length) throw new Error('没有兼容的播放资源');
       const seed = Buffer.from(String(info.key_seed || ''),'base64');
-      if (seed.length) url = api.decryptSpadeUrl(url,seed);
-      if (!/^https?:\/\//.test(url)) throw new Error('播放地址无效');
-      stream = {time:Date.now(),value:{url,key:selected.item.spade_a ? api.deriveContentKey(selected.item.spade_a) : null,quality:api.qualityLabel(selected.quality),codec:String(selected.item.codec_type || '')}};
+      let lastError;
+      for(const selected of candidates.slice(0,3)){
+        for(const encoded of [...new Set([selected.item.main_url,selected.item.backup_url].filter(v=>typeof v==='string'&&v))])try{
+          let url=encoded;if(seed.length)url=api.decryptSpadeUrl(url,seed);
+          if(!/^https?:\/\//.test(url))throw new Error('播放地址无效');
+          const value={url,key:selected.item.spade_a ? api.deriveContentKey(selected.item.spade_a) : null,quality:api.qualityLabel(selected.quality),codec:String(selected.item.codec_type || '')};
+          await prepare(value);stream={time:Date.now(),value};break;
+        }catch(error){lastError=error;}
+        if(stream)break;
+      }
+      if(!stream)throw lastError || new Error('没有兼容的播放资源');
       }
       api.streamCache.set(key,stream);
       while(api.streamCache.size>4)api.streamCache.delete(api.streamCache.keys().next().value);
