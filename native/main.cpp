@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "backend.hpp"
+#include "poster.hpp"
+#include <borealis/views/image.hpp>
 #include <borealis.hpp>
 #include <borealis/views/applet_frame.hpp>
 #include <borealis/views/cells/cell_detail.hpp>
@@ -14,6 +16,7 @@
 #include <fstream>
 #include <memory>
 #include <atomic>
+#include <thread>
 #include <cstring>
 #include <algorithm>
 #include <sys/stat.h>
@@ -27,6 +30,24 @@ static void record(const Json& series,const Json& episode,int index,double secon
 static void message(const std::string& text){auto* dialog=new brls::Dialog(text);dialog->addButton("确定",[]{});dialog->open();}
 static void back(brls::View* view){view->registerAction("返回",brls::BUTTON_B,[](brls::View*){brls::Application::popActivity();return true;});}
 static brls::DetailCell* cell(const std::string& name,const std::string& note,std::function<void()> fn){auto* v=new brls::DetailCell();v->setText(name);v->setDetailText(note);v->registerClickAction([fn](brls::View*){fn();return true;});return v;}
+static std::atomic<int> posterJobs{0};
+class PosterImage:public brls::Image {
+  std::string url;bool started=false,finished=false;
+  std::shared_ptr<std::atomic<bool>> alive=std::make_shared<std::atomic<bool>>(true);
+public:
+  explicit PosterImage(std::string url):url(std::move(url)){setWidth(104);setHeight(156);setScalingType(brls::ImageScalingType::FIT);setBackgroundColor(nvgRGB(40,43,47));}
+  ~PosterImage(){alive->store(false);}
+  void draw(NVGcontext* vg,float x,float y,float w,float h,brls::Style style,brls::FrameContext* ctx)override {
+    if(!started && !url.empty() && y+h>=0 && y<=720 && posterJobs.load()<2){started=true;posterJobs++;auto flag=alive;auto address=url;
+      std::thread([this,flag,address]{PosterPixels image;try{image=fetchPoster(address,*flag);}catch(...){}posterJobs--;brls::sync([this,flag,image=std::move(image)]{if(!flag->load())return;finished=true;if(!image.rgba.empty())innerSetImage(nvgCreateImageRGBA(brls::Application::getNVGContext(),image.width,image.height,0,image.rgba.data()));});}).detach();
+    }
+    if(getTexture())brls::Image::draw(vg,x,y,w,h,style,ctx);
+    else {nvgFontFace(vg,"regular");nvgFontSize(vg,15);nvgFillColor(vg,nvgRGB(160,165,170));nvgTextAlign(vg,NVG_ALIGN_CENTER|NVG_ALIGN_MIDDLE);nvgText(vg,x+w/2,y+h/2,finished||url.empty()?"暂无封面":"封面加载中",nullptr);}
+  }
+};
+static brls::Box* posterCell(const Json& row,std::function<void()> fn){auto* box=new brls::Box(brls::Axis::ROW);box->setHeight(172);box->setPadding(8);box->addView(new PosterImage(row.value("cover",std::string())));auto* text=cell(row.value("title",std::string()),row.value("badge",std::string()),std::move(fn));text->setGrow(1);box->addView(text);return box;}
+static std::mutex playbackErrorMutex;
+static std::string playbackErrorId,playbackError;
 class SceneFrame:public brls::AppletFrame {public:using brls::AppletFrame::setContentView;std::shared_ptr<bool> alive=std::make_shared<bool>(true);~SceneFrame(){*alive=false;}};
 static SceneFrame* frame(brls::Box* list,const std::string& title){auto* scroll=new brls::ScrollingFrame();scroll->setGrow(1);list->setPadding(20,50,30,50);scroll->setContentView(list);auto* f=new SceneFrame();f->setTitle(title);f->setContentView(scroll);back(f);return f;}
 struct Reader{std::string id;int64_t total=0,pos=0,cacheAt=-1;std::vector<unsigned char> cache;std::atomic<bool> cancelled{false};};
@@ -43,7 +64,7 @@ static int openStream(void*,char* uri,mpv_stream_cb_info* info){try{
   const std::string value(uri);if(value.rfind("saf://",0)!=0)return MPV_ERROR_LOADING_FAILED;const std::string id=value.substr(6);if(id.empty()||id.size()>30||id.find_first_not_of("0123456789")!=std::string::npos)return MPV_ERROR_LOADING_FAILED;
   const Json meta=backend->call("open",Json::array({id,480}));auto* r=new Reader();r->id=id;r->total=meta.at("total").get<int64_t>();if(r->total<=0){delete r;return MPV_ERROR_LOADING_FAILED;}
   info->cookie=r;info->read_fn=readStream;info->seek_fn=seekStream;info->size_fn=sizeStream;info->close_fn=closeStream;info->cancel_fn=cancelStream;return 0;
-}catch(...){return MPV_ERROR_LOADING_FAILED;}}
+}catch(const std::exception& e){std::lock_guard<std::mutex> guard(playbackErrorMutex);const std::string uriValue(uri);playbackErrorId=uriValue.rfind("saf://",0)==0?uriValue.substr(6):"";playbackError=e.what();return MPV_ERROR_LOADING_FAILED;}catch(...){return MPV_ERROR_LOADING_FAILED;}}
 static void* getProc(void*,const char* name){return (void*)glfwGetProcAddress(name);}
 class Player:public brls::Box {
   mpv_handle* mpv=nullptr;mpv_render_context* renderer=nullptr;
@@ -72,7 +93,7 @@ public:
   ~Player(){*alive=false;persist();if(renderer)mpv_render_context_free(renderer);if(mpv)mpv_terminate_destroy(mpv);appletSetMediaPlaybackState(false);}
   void draw(NVGcontext* vg,float x,float y,float w,float h,brls::Style style,brls::FrameContext* ctx)override{
     if(mpv&&!failed){for(int count=0;count<30;count++){mpv_event* event=mpv_wait_event(mpv,0);if(event->event_id==MPV_EVENT_NONE)break;if(event->event_id==MPV_EVENT_FILE_LOADED){status="";if(resumeTarget>0){const std::string at=std::to_string(resumeTarget);const char* seek[]={"seek",at.c_str(),"absolute",nullptr};mpv_command(mpv,seek);resumeTarget=0;}}
-      if(event->event_id==MPV_EVENT_END_FILE){auto* end=(mpv_event_end_file*)event->data;if(end&&end->reason==MPV_END_FILE_REASON_ERROR){status="内容源或视频播放暂不可用";}else if(end&&end->reason==MPV_END_FILE_REASON_EOF&&!nextQueued){nextQueued=true;auto flag=alive;int next=index+1;brls::sync([this,flag,next]{if(*flag)startEpisode(next);});}}
+      if(event->event_id==MPV_EVENT_END_FILE){auto* end=(mpv_event_end_file*)event->data;if(end&&end->reason==MPV_END_FILE_REASON_ERROR){status="内容源或视频播放暂不可用";std::lock_guard<std::mutex> guard(playbackErrorMutex);if(playbackErrorId==episodes[index].value("id",std::string())&&!playbackError.empty())status=playbackError;}else if(end&&end->reason==MPV_END_FILE_REASON_EOF&&!nextQueued){nextQueued=true;auto flag=alive;int next=index+1;brls::sync([this,flag,next]{if(*flag)startEpisode(next);});}}
     }mpv_get_property(mpv,"time-pos",MPV_FORMAT_DOUBLE,&position);mpv_get_property(mpv,"duration",MPV_FORMAT_DOUBLE,&duration);if(armGetSystemTick()-lastSave>armNsToTicks(10000000000ULL)){lastSave=armGetSystemTick();persist();}}
     nvgEndFrame(vg);GLint fbo=0;glGetIntegerv(GL_FRAMEBUFFER_BINDING,&fbo);glBindFramebuffer(GL_FRAMEBUFFER,fbo);glViewport(0,0,brls::Application::windowWidth,brls::Application::windowHeight);glDisable(GL_SCISSOR_TEST);glDisable(GL_STENCIL_TEST);glDisable(GL_DEPTH_TEST);glDisable(GL_BLEND);glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
     if(renderer&&!failed){mpv_opengl_fbo surface{fbo,(int)brls::Application::windowWidth,(int)brls::Application::windowHeight,0};int flip=1;mpv_render_param params[]={{MPV_RENDER_PARAM_OPENGL_FBO,&surface},{MPV_RENDER_PARAM_FLIP_Y,&flip},{MPV_RENDER_PARAM_INVALID,nullptr}};mpv_render_context_render(renderer,params);mpv_render_context_report_swap(renderer);}else{glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);}
@@ -88,7 +109,7 @@ class Page:public brls::Box {
   std::shared_ptr<bool> alive=std::make_shared<bool>(true);brls::Box* list;
 public:
   Page(const std::string& method,const Json& args):brls::Box(brls::Axis::COLUMN){this->setGrow(1);list=new brls::Box(brls::Axis::COLUMN);list->setPadding(20,50,30,50);auto* label=new brls::Label();label->setText("正在加载…");list->addView(label);auto* scroll=new brls::ScrollingFrame();scroll->setGrow(1);scroll->setContentView(list);this->addView(scroll);back(this);auto flag=alive;
-    brls::async([this,flag,method,args]{Json response;bool ok=false;try{response=backend->call(method,args);ok=true;}catch(...){}brls::sync([this,flag,ok,response,method,args]{if(!*flag)return;list->clearViews();if(!ok){list->addView(cell("内容源或网络暂不可用","按 B 返回后重试",[]{}));return;}for(const auto& row:response["items"]){if(!row.is_object()||!row.contains("id")||!row.contains("title"))continue;list->addView(cell(row.value("title",std::string()),row.value("badge",std::string()),[row]{showDetail(row);}));}if(response.value("hasMore",false)){list->addView(cell("下一页","继续加载",[method,args]{Json next=args;const int at=method=="home"?0:1;next[at]=next[at].get<int>()+1;brls::Application::pushActivity(new brls::Activity(new Page(method,next)));}));}});});
+    brls::async([this,flag,method,args]{Json response;bool ok=false;try{response=backend->call(method,args);ok=true;}catch(...){}brls::sync([this,flag,ok,response,method,args]{if(!*flag)return;list->clearViews();if(!ok){list->addView(cell("内容源或网络暂不可用","按 B 返回后重试",[]{}));return;}for(const auto& row:response["items"]){if(!row.is_object()||!row.contains("id")||!row.contains("title"))continue;list->addView(posterCell(row,[row]{showDetail(row);}));}if(response.value("hasMore",false)){list->addView(cell("下一页","继续加载",[method,args]{Json next=args;const int at=method=="home"?0:1;next[at]=next[at].get<int>()+1;brls::Application::pushActivity(new brls::Activity(new Page(method,next)));}));}});});
   }
   ~Page(){*alive=false;}
 };
@@ -96,15 +117,16 @@ static void showDetail(const Json& series){auto* list=new brls::Box(brls::Axis::
   // The frame owns the flag; work never touches a destroyed view.
   auto flag=f->alive;
   brls::async([list,flag,series]{Json detail;bool ok=false;try{detail=backend->call("detail",Json::array({series.at("id")}));ok=true;}catch(...){}brls::sync([list,flag,ok,detail]{if(!*flag)return;list->clearViews();if(!ok){list->addView(cell("分集暂不可用","按 B 返回",[]{}));return;}
+    list->addView(posterCell(detail,[]{}));
     list->addView(cell("收藏 / 取消收藏","保存在当前主机",[detail]{auto& rows=library["favorites"];auto it=std::find_if(rows.begin(),rows.end(),[&](const Json& row){return row.value("id",std::string())==detail.value("id",std::string());});if(it==rows.end()){Json row=detail;row.erase("episodes");rows.push_back(row);message("已收藏");}else{rows.erase(it);message("已取消收藏");}save();}));
     for(size_t i=0;i<detail["episodes"].size();i++)list->addView(cell("第 "+std::to_string(i+1)+" 集","A 播放",[detail,i]{brls::Application::pushActivity(new brls::Activity(new Player(detail,(int)i)));}));
   });});
 }
 static brls::View* home(){auto* list=new brls::Box(brls::Axis::COLUMN);list->addView(cell("短剧推荐","浏览并选集播放",[]{brls::Application::pushActivity(new brls::Activity(new Page("home",Json::array({1,"short"}))));}));list->addView(cell("漫剧推荐","浏览并选集播放",[]{brls::Application::pushActivity(new brls::Activity(new Page("home",Json::array({1,"comic"}))));}));
   list->addView(cell("搜索短剧","使用系统键盘",[]{SwkbdConfig keyboard;if(R_FAILED(swkbdCreate(&keyboard,0)))return;swkbdConfigMakePresetDefault(&keyboard);swkbdConfigSetStringLenMax(&keyboard,80);swkbdConfigSetGuideText(&keyboard,"输入剧名");char text[512]={};Result result=swkbdShow(&keyboard,text,sizeof(text));swkbdClose(&keyboard);if(R_SUCCEEDED(result)&&text[0])brls::Application::pushActivity(new brls::Activity(new Page("search",Json::array({std::string(text),1,"short"}))));}));
-  list->addView(cell("我的收藏","本机收藏列表",[]{auto* box=new brls::Box(brls::Axis::COLUMN);for(const auto& row:library["favorites"])box->addView(cell(row.value("title",std::string()),"查看分集",[row]{showDetail(row);}));brls::Application::pushActivity(new brls::Activity(frame(box,"我的收藏")));}));
-  list->addView(cell("最近观看","查看已观看剧集",[]{auto* box=new brls::Box(brls::Axis::COLUMN);for(const auto& row:library["history"]){const auto series=row.value("series",Json::object());box->addView(cell(series.value("title",std::string()),"第 "+std::to_string(row.value("episodeIndex",0)+1)+" 集",[series]{showDetail(series);}));}brls::Application::pushActivity(new brls::Activity(frame(box,"最近观看")));}));
-  list->addView(cell("关于","Switch 原生试验版 0.1.0",[]{message("红果短剧\n原生自制应用，无需电脑中转。\n实机播放和系统 22.5.0 兼容性尚未验证。\n网络错误会明确显示。GPL-3.0-only。");}));return frame(list,"红果短剧");
+  list->addView(cell("我的收藏","本机收藏列表",[]{auto* box=new brls::Box(brls::Axis::COLUMN);for(const auto& row:library["favorites"])box->addView(posterCell(row,[row]{showDetail(row);}));brls::Application::pushActivity(new brls::Activity(frame(box,"我的收藏")));}));
+  list->addView(cell("最近观看","查看已观看剧集",[]{auto* box=new brls::Box(brls::Axis::COLUMN);for(const auto& row:library["history"]){const auto series=row.value("series",Json::object());box->addView(posterCell(series,[series]{showDetail(series);}));}brls::Application::pushActivity(new brls::Activity(frame(box,"最近观看")));}));
+  list->addView(cell("关于","Switch 原生试验版 0.1.1",[]{message("红果短剧\n原生自制应用，无需电脑中转。\n0.1.1 已加入封面及官网播放入口。\n用户已确认旧版能启动；新版播放待实机验证。\n网络错误会明确显示。GPL-3.0-only。");}));return frame(list,"红果短剧");
 }
 int main(int,char**){curl_global_init(CURL_GLOBAL_DEFAULT);if(!brls::Application::init())return 1;brls::Application::createWindow("红果短剧");brls::Application::setGlobalQuit(true);load();
   try{backend=new Backend();const auto result=backend->call("selftest",Json::array());if(result.value("sm3",std::string())!="66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0")throw std::runtime_error("Self test");brls::Application::pushActivity(new brls::Activity(home()));}
