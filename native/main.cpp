@@ -82,7 +82,7 @@ static void* getProc(void*,const char* name){return (void*)glfwGetProcAddress(na
 class Player:public brls::Box {
   mpv_handle* mpv=nullptr;mpv_render_context* renderer=nullptr;
   Json series,episodes;int index=0,speedIndex=1,rotation=0;
-  bool failed=false,nextQueued=false,paused=false,errorState=false,menuVisible=false,loaded=false;
+  bool failed=false,nextQueued=false,paused=false,errorState=false,menuVisible=false,loaded=false,tapStartedOnControls=false;
   double position=0,duration=0,resumeTarget=0;bool opened=false;uint64_t lastSave=0;size_t retryDelay=0;
   std::string status="正在连接播放源…",lastProgress;
   std::shared_ptr<std::atomic<bool>> alive=std::make_shared<std::atomic<bool>>(true);
@@ -106,7 +106,7 @@ class Player:public brls::Box {
 public:
   Player(Json detail,int episode):brls::Box(brls::Axis::COLUMN),series(detail),episodes(detail.at("episodes")),index(episode){
     setGrow(1);setBackgroundColor(nvgRGB(0,0,0));setFocusable(true);setHideHighlight(true);appletSetMediaPlaybackState(true);if(library.contains("autoplay")&&library["autoplay"].is_boolean())policy.continuous=library["autoplay"].get<bool>();buildMenu();
-    addGestureRecognizer(new brls::TapGestureRecognizer([this](brls::TapGestureStatus touch,brls::Sound*){if(touch.state==brls::GestureState::END&&(!menuVisible||!controls->getFrame().pointInside(touch.position)))showMenu(!menuVisible);}));
+    addGestureRecognizer(new brls::TapGestureRecognizer([this](brls::TapGestureStatus touch,brls::Sound*){if(touch.state==brls::GestureState::UNSURE)tapStartedOnControls=menuVisible&&controls->getFrame().pointInside(touch.position);else if(touch.state==brls::GestureState::END&&!tapStartedOnControls)showMenu(!menuVisible);}));
     registerAction("返回",brls::BUTTON_B,[this](brls::View*){if(menuVisible)showMenu(false);else brls::Application::popActivity();return true;});
     registerAction("播放/暂停",brls::BUTTON_A,[this](brls::View*){togglePause();return true;});registerAction("菜单",brls::BUTTON_X,[this](brls::View*){showMenu(!menuVisible);return true;});
     registerAction("后退10秒",brls::BUTTON_LEFT,[this](brls::View*){if(menuVisible)return false;seek(-10);return true;});registerAction("前进10秒",brls::BUTTON_RIGHT,[this](brls::View*){if(menuVisible)return false;seek(10);return true;});
