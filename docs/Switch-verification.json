@@ -1,0 +1,25 @@
+{
+  "name": "红果短剧",
+  "version": "0.1.0-alpha.1",
+  "titleId": "0100F00D53414600",
+  "nspBytes": 21646552,
+  "sha256": "43bac2cb682f44c82794da9031b8d18a19b11eb14f08ccd4fc51efbe4b85a987",
+  "nativeArchitecture": "AArch64",
+  "ncaTypes": [
+    0,
+    2,
+    1
+  ],
+  "containerChecksPassed": true,
+  "privateKeyScanPassed": true,
+  "hardwareTested": false,
+  "system2250Tested": false,
+  "liveCatalogRows": 24,
+  "liveEpisodeCount": 69,
+  "liveVideoModelError": "未知异常",
+  "livePlaybackVerified": false,
+  "githubDisplayName": "红果短剧Switch客户端",
+  "repository": "zqzhuhai-commits/hongguo-switch",
+  "sourceCommit": "1cff3439fd0ca97fcbf4bbfc4026ee95a614d65d",
+  "applicationType": 1
+}
