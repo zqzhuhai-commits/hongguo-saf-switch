@@ -4,7 +4,7 @@ const card=row=>({id:String(row.url),title:String(row.title||''),cover:String(ro
 const cards=rows=>[...new Map(Array.from(rows,card).filter(r=>validId(r.id)&&r.title).map(r=>[r.id,r])).values()];
 const episodeSeries = new Map();
 async function publicComicPage(page) {
-  const html=await getText(`${SITE}/rank/hot-comic-drama?page=${page}`);
+  const html=await getText(`${SITE}/rank/hot-comic-drama?page=${page}`,{headers:{'User-Agent':'Mozilla/5.0','Referer':SITE+'/'}});
   for(const match of html.matchAll(/<script\b[^>]*data-fn-name="([^"]+)"[^>]*data-fn-args="([^"]+)"[^>]*>/g)) {
     let args;try{args=JSON.parse(decodeHtml(match[2]));}catch(_){continue;}
     if(args[0]!=='rank_hot-comic-drama/page')continue;
@@ -17,7 +17,20 @@ async function publicComicPage(page) {
     if(pages<1 || Number(value.pagination.pageNum || page)!==page)throw new Error('漫剧分页信息异常');
     return {items:cards(value.rankList.map(rankItemToCard)),page,hasMore:page<pages};
   }
-  throw new Error('漫剧榜单数据暂不可用');
+  // Some streamed responses render cards before resolving the loader payload.
+  const route=extractAssignedJson(html)?.loaderData?.['rank_hot-comic-drama/page'];
+  if(route?.rankKey!=='comic' || Number(route.pageNum)!==page)throw new Error('漫剧分页信息异常');
+  const text=value=>decodeHtml(String(value||'').replace(/<[^>]*>/g,'')).trim();
+  const items=[];
+  for(const match of html.matchAll(/<article\b[^>]*aria-labelledby="rank-title-(\d{1,30})"[^>]*>([\s\S]*?)<\/article>/g)) {
+    const body=match[2],title=body.match(new RegExp('<h[1-6]\\b[^>]*id="rank-title-'+match[1]+'"[^>]*>([\\s\\S]*?)<\\/h[1-6]>'));
+    const cover=body.match(/<img\b[^>]*\bsrc="([^"]+)"/);
+    if(title)items.push({id:match[1],title:text(title[1]),cover:cover?decodeHtml(cover[1]):'',badge:'漫剧',description:'',tags:''});
+  }
+  const nav=html.match(/<nav\b[^>]*aria-label="榜单分页"[^>]*>([\s\S]*?)<\/nav>/)?.[1] || '';
+  const current=nav.match(/aria-current="page"[^>]*>(\d+)</)?.[1];
+  if(!items.length || Number(current)!==page)throw new Error('漫剧榜单数据暂不可用');
+  return {items:[...new Map(items.map(row=>[row.id,row])).values()],page,hasMore:page<100 && /rel="next"/.test(nav)};
 }
 async function publicWebStream(id) {
   const sid = episodeSeries.get(id) || '_';
@@ -82,8 +95,8 @@ async function prepare(stream) {
 const provider = {
   async home(page = 1, type = 'comic') {
     if(type==='comic'){
-      try {const r=await appSearchPage('热门',19,page,24);return {items:cards(r.list),page,hasMore:r.hasMore};}
-      catch (_) {return publicComicPage(page);}
+      try {return await publicComicPage(page);}
+      catch (_) {const r=await appSearchPage('热门',19,page,24);return {items:cards(r.list),page,hasMore:r.hasMore};}
     }
     const data = await api.categoryPage('tab=1&sort_type=1',page);
     const section = data?.loaderData?.category_page || data?.loaderData?.['category_$'];
