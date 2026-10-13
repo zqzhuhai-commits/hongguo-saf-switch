@@ -9,3 +9,4 @@ if [ ! -d dependencies/quickjs/.git ]; then
   git clone https://github.com/bellard/quickjs.git dependencies/quickjs
 fi
 git -C dependencies/quickjs checkout --detach a37f62afbb6ad245cd84beb297fad00bef2c5410
+python3 scripts/patch-quickjs.py
