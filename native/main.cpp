@@ -3,6 +3,8 @@
 #include "poster.hpp"
 #include "workers.hpp"
 #include "playback_policy.hpp"
+#include "playback_touch.hpp"
+#include <chrono>
 #include <cstdio>
 #include <borealis/views/image.hpp>
 #include <borealis.hpp>
@@ -79,34 +81,75 @@ static int openStream(void*,char* uri,mpv_stream_cb_info* info){try{
   info->cookie=r;info->read_fn=readStream;info->seek_fn=seekStream;info->size_fn=sizeStream;info->close_fn=closeStream;info->cancel_fn=cancelStream;return 0;
 }catch(const std::exception& e){std::lock_guard<std::mutex> guard(playbackErrorMutex);const std::string uriValue(uri);playbackErrorId=uriValue.rfind("saf://",0)==0?uriValue.substr(6):"";playbackError=e.what();return MPV_ERROR_LOADING_FAILED;}catch(...){return MPV_ERROR_LOADING_FAILED;}}
 static void* getProc(void*,const char* name){return (void*)glfwGetProcAddress(name);}
+// Continuous touch tracking is needed for release-to-restore, including cancellation.
+class PlaybackTouchGesture:public brls::GestureRecognizer {
+  std::function<void(brls::GestureState,brls::Point)> callback;bool exclusive,active=false;int finger=0;
+public:
+  PlaybackTouchGesture(std::function<void(brls::GestureState,brls::Point)> fn,bool claim=false):callback(fn),exclusive(claim){}
+  brls::GestureState recognitionLoop(brls::TouchState touch,brls::MouseState mouse,brls::View*,brls::Sound* sound)override{
+    auto phase=touch.phase;auto point=touch.position;if(phase==brls::TouchPhase::NONE){phase=mouse.leftButton;point=mouse.position;}*sound=brls::SOUND_NONE;
+    if(phase==brls::TouchPhase::START){active=true;finger=touch.fingerId;state=exclusive?brls::GestureState::START:brls::GestureState::UNSURE;callback(state,point);return state;}
+    if(!active)return brls::GestureState::FAILED;
+    if(state==brls::GestureState::INTERRUPTED||phase==brls::TouchPhase::NONE||finger!=touch.fingerId){active=false;callback(brls::GestureState::INTERRUPTED,point);return state=brls::GestureState::FAILED;}
+    if(phase==brls::TouchPhase::END){active=false;callback(brls::GestureState::END,point);return state=brls::GestureState::END;}
+    callback(brls::GestureState::STAY,point);return state=exclusive?brls::GestureState::STAY:brls::GestureState::UNSURE;
+  }
+};
+class PlaybackTimeline:public brls::View {
+  double current=0,total=0,preview=0;bool dragging=false,available=false;
+  std::function<void(double)> seek;
+  void updateTouch(brls::Point p){preview=playbackSeekAt(p.x,getX()+16,getWidth()-32,total);}
+public:
+  explicit PlaybackTimeline(std::function<void(double)> fn):seek(fn){setFocusable(true);setHideHighlight(false);setHeight(64);
+    addGestureRecognizer(new PlaybackTouchGesture([this](brls::GestureState state,brls::Point point){if(state==brls::GestureState::START){dragging=available;updateTouch(point);brls::Application::giveFocus(this);}else if(state==brls::GestureState::STAY&&dragging)updateTouch(point);else if(state==brls::GestureState::END){if(dragging){updateTouch(point);seek(preview);}dragging=false;}else if(state==brls::GestureState::INTERRUPTED)dragging=false;},true));
+    registerAction("后退5秒",brls::BUTTON_LEFT,[this](brls::View*){if(available)seek(std::max(0.0,current-5));return true;});registerAction("前进5秒",brls::BUTTON_RIGHT,[this](brls::View*){if(available)seek(std::min(total,current+5));return true;});
+  }
+  void update(double at,double length,bool enabled){current=at;total=length;available=enabled&&length>0;if(!available)dragging=false;}
+  void reset(){dragging=false;available=false;current=total=preview=0;}
+  void draw(NVGcontext* vg,float x,float y,float w,float h,brls::Style,brls::FrameContext*)override{
+    const double shown=dragging?preview:current;const float left=x+16,width=std::max(1.0f,w-32),at=left+(float)playbackSeekAt(shown,0,total,1)*width;
+    nvgBeginPath(vg);nvgRoundedRect(vg,x,y,w,h,8);nvgFillColor(vg,nvgRGBA(15,17,23,215));nvgFill(vg);
+    nvgFontFaceId(vg,brls::Application::getDefaultFont());nvgFontSize(vg,16);nvgTextAlign(vg,NVG_ALIGN_LEFT|NVG_ALIGN_TOP);nvgFillColor(vg,nvgRGB(245,245,245));
+    auto clock=[](double t){int s=std::max(0,(int)t);char b[32];std::snprintf(b,sizeof(b),"%d:%02d",s/60,s%60);return std::string(b);};const std::string label=clock(shown)+" / "+clock(total)+(dragging?"  松开跳转":available?"  拖动进度条跳转":"  等待视频加载");nvgText(vg,left,y+7,label.c_str(),nullptr);
+    nvgBeginPath(vg);nvgRoundedRect(vg,left,y+40,width,6,3);nvgFillColor(vg,nvgRGB(105,110,122));nvgFill(vg);
+    nvgBeginPath(vg);nvgRoundedRect(vg,left,y+40,std::max(0.0f,at-left),6,3);nvgFillColor(vg,nvgRGB(242,85,103));nvgFill(vg);
+    nvgBeginPath(vg);nvgCircle(vg,at,y+43,dragging?11:8);nvgFillColor(vg,nvgRGB(255,255,255));nvgFill(vg);
+  }
+};
+
 class Player:public brls::Box {
   mpv_handle* mpv=nullptr;mpv_render_context* renderer=nullptr;
   Json series,episodes;int index=0,speedIndex=1,rotation=0;
-  bool failed=false,nextQueued=false,paused=false,errorState=false,menuVisible=false,loaded=false,tapStartedOnControls=false;
+  bool failed=false,nextQueued=false,paused=false,errorState=false,menuVisible=false,loaded=false,holdApplied=false;
   double position=0,duration=0,resumeTarget=0;bool opened=false;uint64_t lastSave=0;size_t retryDelay=0;
   std::string status="正在连接播放源…",lastProgress;
   std::shared_ptr<std::atomic<bool>> alive=std::make_shared<std::atomic<bool>>(true);
+  PlaybackHold hold;PlaybackTimeline* timeline=nullptr;
   PlaybackPolicy policy;brls::Box* controls=nullptr;brls::View* firstControl=nullptr;brls::Label* progress=nullptr;
   static std::string clockText(double value){int seconds=std::max(0,(int)value);char text[32];std::snprintf(text,sizeof(text),"%d:%02d",seconds/60,seconds%60);return text;}
+  static uint64_t touchTime(){return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
+  void stopHold(){if(holdApplied&&mpv){double rate=hold.previousSpeed;mpv_set_property(mpv,"speed",MPV_FORMAT_DOUBLE,&rate);}holdApplied=false;hold.cancel();}
+  void seekTo(double at){if(!mpv||failed||errorState||!loaded||duration<=0)return;stopHold();const std::string value=std::to_string(std::clamp(at,0.0,duration));const char* cmd[]={"seek",value.c_str(),"absolute",nullptr};if(mpv_command(mpv,cmd)>=0){position=std::clamp(at,0.0,duration);persist();}}
+  void screenTouch(brls::GestureState state,brls::Point point){if(state==brls::GestureState::UNSURE){stopHold();const bool excluded=(menuVisible&&controls->getFrame().pointInside(point))||timeline->getFrame().pointInside(point);hold.begin(!excluded,touchTime(),point.x,point.y);}else if(state==brls::GestureState::STAY){if(!getFrame().pointInside(point)){stopHold();return;}if(hold.tick(touchTime(),point.x,point.y)&&mpv&&!failed&&!errorState&&loaded&&!paused){hold.previousSpeed=1;mpv_get_property(mpv,"speed",MPV_FORMAT_DOUBLE,&hold.previousSpeed);double rate=2;holdApplied=mpv_set_property(mpv,"speed",MPV_FORMAT_DOUBLE,&rate)>=0;}}else if(state==brls::GestureState::END){const bool tap=hold.isTap();stopHold();if(tap)showMenu(!menuVisible);}else if(state==brls::GestureState::INTERRUPTED)stopHold();}
   void persist(){if(opened&&(position>0||duration>0)&&index>=0&&index<(int)episodes.size())record(series,episodes[index],index,position,duration);}
-  void showMenu(bool visible){menuVisible=visible;if(!visible)brls::Application::giveFocus(this);controls->setVisibility(visible?brls::Visibility::VISIBLE:brls::Visibility::GONE);if(visible&&firstControl)brls::Application::giveFocus(firstControl);}
-  void togglePause(){if(errorState){retryNow();return;}if(!mpv||failed)return;paused=!paused;int value=paused;mpv_set_property(mpv,"pause",MPV_FORMAT_FLAG,&value);}
+  void showMenu(bool visible){stopHold();menuVisible=visible;if(!visible)brls::Application::giveFocus(this);controls->setVisibility(visible?brls::Visibility::VISIBLE:brls::Visibility::GONE);if(visible&&firstControl)brls::Application::giveFocus(firstControl);}
+  void togglePause(){stopHold();if(errorState){retryNow();return;}if(!mpv||failed)return;paused=!paused;int value=paused;mpv_set_property(mpv,"pause",MPV_FORMAT_FLAG,&value);}
   void seek(int seconds){if(!mpv||failed||errorState)return;const std::string value=std::to_string(seconds);const char* cmd[]={"seek",value.c_str(),"relative",nullptr};mpv_command(mpv,cmd);}
-  void cycleSpeed(){if(!mpv||failed)return;const double rates[]={0.75,1,1.25,1.5,2};speedIndex=(speedIndex+1)%5;double rate=rates[speedIndex];mpv_set_property(mpv,"speed",MPV_FORMAT_DOUBLE,&rate);}
+  void cycleSpeed(){stopHold();if(!mpv||failed)return;const double rates[]={0.75,1,1.25,1.5,2};speedIndex=(speedIndex+1)%5;double rate=rates[speedIndex];mpv_set_property(mpv,"speed",MPV_FORMAT_DOUBLE,&rate);}
   void rotateVideo(){if(!mpv||failed)return;int64_t angle=rotation==0?90:0;if(mpv_set_property(mpv,"video-rotate",MPV_FORMAT_INT64,&angle)>=0)rotation=(int)angle;else status="当前视频暂不支持方向切换";}
   void retryNow(){if(mpv&&renderer&&!failed)startEpisode(index);}
-  void scheduleRetry(){errorState=true;if(policy.pending)return;auto wait=policy.scheduleRetry();if(!wait){status="本集暂时无法播放，可重试或选择其他分集。";showMenu(true);return;}trace("playback:retry_scheduled:"+std::to_string(policy.retries));status="正在重新获取播放源（重试 "+std::to_string(policy.retries)+"/3）…";auto flag=alive;const auto token=policy.generation;retryDelay=brls::delay(*wait,[this,flag,token]{if(!flag->load())return;if(policy.consumeRetry(token)){retryDelay=0;startEpisode(index,true);}});}
-  void startEpisode(int target,bool retry=false){if(!mpv||!renderer||failed||target<0||target>=(int)episodes.size())return;if(retryDelay){brls::cancelDelay(retryDelay);retryDelay=0;}policy.begin(retry);persist();index=target;position=0;duration=0;opened=true;resumeTarget=0;for(const auto& row:library["history"])if(row.value("episodeId",std::string())==episodes[index].value("id",std::string()))resumeTarget=row.value("position",0.0)/1000;nextQueued=false;paused=false;errorState=false;loaded=false;int unpause=0;mpv_set_property(mpv,"pause",MPV_FORMAT_FLAG,&unpause);status=retry?"正在重新连接（重试 "+std::to_string(policy.retries)+"/3）…":"正在连接播放源…";{std::lock_guard<std::mutex> lock(playbackErrorMutex);playbackErrorId.clear();playbackError.clear();}const auto url="saf://"+episodes[index].at("id").get<std::string>();const char* command[]={"loadfile",url.c_str(),"replace",nullptr};trace("playback:load_begin");if(mpv_command(mpv,command)<0)scheduleRetry();}
-  void buildMenu(){controls=new brls::Box(brls::Axis::COLUMN);controls->detach();controls->setDetachedPosition(24,432);controls->setSize(brls::Size(1232,270));controls->setPadding(16);controls->setBackgroundColor(nvgRGBA(15,17,23,235));progress=new brls::Label();progress->setWidth(1200);progress->setHeight(24);progress->setFontSize(18);progress->setHorizontalAlign(brls::HorizontalAlign::LEFT);progress->setMarginBottom(12);controls->addView(progress);std::vector<brls::View*> buttons;
+  void scheduleRetry(){stopHold();timeline->reset();errorState=true;if(policy.pending)return;auto wait=policy.scheduleRetry();if(!wait){status="本集暂时无法播放，可重试或选择其他分集。";showMenu(true);return;}trace("playback:retry_scheduled:"+std::to_string(policy.retries));status="正在重新获取播放源（重试 "+std::to_string(policy.retries)+"/3）…";auto flag=alive;const auto token=policy.generation;retryDelay=brls::delay(*wait,[this,flag,token]{if(!flag->load())return;if(policy.consumeRetry(token)){retryDelay=0;startEpisode(index,true);}});}
+  void startEpisode(int target,bool retry=false){if(!mpv||!renderer||failed||target<0||target>=(int)episodes.size())return;stopHold();timeline->reset();if(retryDelay){brls::cancelDelay(retryDelay);retryDelay=0;}policy.begin(retry);persist();index=target;position=0;duration=0;opened=true;resumeTarget=0;for(const auto& row:library["history"])if(row.value("episodeId",std::string())==episodes[index].value("id",std::string()))resumeTarget=row.value("position",0.0)/1000;nextQueued=false;paused=false;errorState=false;loaded=false;int unpause=0;mpv_set_property(mpv,"pause",MPV_FORMAT_FLAG,&unpause);status=retry?"正在重新连接（重试 "+std::to_string(policy.retries)+"/3）…":"正在连接播放源…";{std::lock_guard<std::mutex> lock(playbackErrorMutex);playbackErrorId.clear();playbackError.clear();}const auto url="saf://"+episodes[index].at("id").get<std::string>();const char* command[]={"loadfile",url.c_str(),"replace",nullptr};trace("playback:load_begin");if(mpv_command(mpv,command)<0)scheduleRetry();}
+  void buildMenu(){controls=new brls::Box(brls::Axis::COLUMN);controls->detach();controls->setDetachedPosition(24,346);controls->setSize(brls::Size(1232,286));controls->setPadding(16);controls->setBackgroundColor(nvgRGBA(15,17,23,235));progress=new brls::Label();progress->setWidth(1200);progress->setHeight(24);progress->setFontSize(18);progress->setHorizontalAlign(brls::HorizontalAlign::LEFT);progress->setMarginBottom(12);controls->addView(progress);std::vector<brls::View*> buttons;
     auto add=[&](const std::string& title,std::function<void()> fn){auto* button=new ClickableBox(brls::Axis::COLUMN);button->setWidth(284);button->setHeight(56);button->setPadding(10);button->setBackgroundColor(nvgRGB(42,46,58));auto* label=new brls::Label();label->setText(title);label->setFontSize(18);label->setHorizontalAlign(brls::HorizontalAlign::CENTER);button->addView(label);button->registerClickAction([fn](brls::View*){fn();return true;});buttons.push_back(button);};
     add("播放 / 暂停",[this]{togglePause();});add("后退 10 秒",[this]{seek(-10);});add("前进 10 秒",[this]{seek(10);});add("横竖切换",[this]{rotateVideo();});
     add("上一集",[this]{startEpisode(index-1);});add("下一集",[this]{startEpisode(index+1);});add("倍速",[this]{cycleSpeed();});add("自动连播 开 / 关",[this]{policy.continuous=!policy.continuous;library["autoplay"]=policy.continuous;save();});
-    add("重试本集",[this]{retryNow();});add("隐藏菜单",[this]{showMenu(false);});add("返回列表",[]{brls::Application::popActivity();});addGrid(controls,buttons,4,12,8);firstControl=buttons.front();controls->setVisibility(brls::Visibility::GONE);addView(controls);
+    add("重试本集",[this]{retryNow();});add("隐藏菜单",[this]{showMenu(false);});add("返回列表",[]{brls::Application::popActivity();});addGrid(controls,buttons,4,12,8);firstControl=buttons.front();controls->setVisibility(brls::Visibility::GONE);addView(controls);timeline=new PlaybackTimeline([this](double at){seekTo(at);});timeline->detach();timeline->setDetachedPosition(24,644);timeline->setSize(brls::Size(1232,64));timeline->registerAction("控制菜单",brls::BUTTON_UP,[this](brls::View*){showMenu(true);return true;});addView(timeline);
   }
 public:
   Player(Json detail,int episode):brls::Box(brls::Axis::COLUMN),series(detail),episodes(detail.at("episodes")),index(episode){
     setGrow(1);setBackgroundColor(nvgRGB(0,0,0));setFocusable(true);setHideHighlight(true);appletSetMediaPlaybackState(true);if(library.contains("autoplay")&&library["autoplay"].is_boolean())policy.continuous=library["autoplay"].get<bool>();buildMenu();
-    addGestureRecognizer(new brls::TapGestureRecognizer([this](brls::TapGestureStatus touch,brls::Sound*){if(touch.state==brls::GestureState::UNSURE)tapStartedOnControls=menuVisible&&controls->getFrame().pointInside(touch.position);else if(touch.state==brls::GestureState::END&&!tapStartedOnControls)showMenu(!menuVisible);}));
+    addGestureRecognizer(new PlaybackTouchGesture([this](brls::GestureState state,brls::Point point){screenTouch(state,point);}));
     registerAction("返回",brls::BUTTON_B,[this](brls::View*){if(menuVisible)showMenu(false);else brls::Application::popActivity();return true;});
     registerAction("播放/暂停",brls::BUTTON_A,[this](brls::View*){togglePause();return true;});registerAction("菜单",brls::BUTTON_X,[this](brls::View*){showMenu(!menuVisible);return true;});
     registerAction("后退10秒",brls::BUTTON_LEFT,[this](brls::View*){if(menuVisible)return false;seek(-10);return true;});registerAction("前进10秒",brls::BUTTON_RIGHT,[this](brls::View*){if(menuVisible)return false;seek(10);return true;});
@@ -117,7 +160,7 @@ public:
     mpv_opengl_init_params gl{getProc,nullptr};mpv_render_param params[]={{MPV_RENDER_PARAM_API_TYPE,(void*)MPV_RENDER_API_TYPE_OPENGL},{MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,&gl},{MPV_RENDER_PARAM_INVALID,nullptr}};
     if(mpv_render_context_create(&renderer,mpv,params)<0){failed=true;status="视频渲染初始化失败";return;}startEpisode(index);
   }
-  ~Player(){*alive=false;if(retryDelay)brls::cancelDelay(retryDelay);persist();if(renderer)mpv_render_context_free(renderer);if(mpv)mpv_terminate_destroy(mpv);appletSetMediaPlaybackState(false);}
+  ~Player(){stopHold();*alive=false;if(retryDelay)brls::cancelDelay(retryDelay);persist();if(renderer)mpv_render_context_free(renderer);if(mpv)mpv_terminate_destroy(mpv);appletSetMediaPlaybackState(false);}
   void draw(NVGcontext* vg,float x,float y,float w,float h,brls::Style style,brls::FrameContext* ctx)override{
     if(mpv&&!failed){for(int count=0;count<30;count++){mpv_event* event=mpv_wait_event(mpv,0);if(event->event_id==MPV_EVENT_NONE)break;if(event->event_id==MPV_EVENT_FILE_LOADED){status="";errorState=false;loaded=true;trace("playback:loaded");if(resumeTarget>0){const std::string at=std::to_string(resumeTarget);const char* seekCommand[]={"seek",at.c_str(),"absolute",nullptr};mpv_command(mpv,seekCommand);resumeTarget=0;}}
       if(event->event_id==MPV_EVENT_END_FILE){auto* end=(mpv_event_end_file*)event->data;if(end&&end->reason==MPV_END_FILE_REASON_ERROR){trace("playback:failed");scheduleRetry();}else if(end&&end->reason==MPV_END_FILE_REASON_EOF&&!nextQueued){nextQueued=true;if(duration>0)position=duration;persist();const int next=policy.nextEpisode(index,(int)episodes.size());if(next>=0){auto flag=alive;const auto generation=policy.generation;brls::sync([this,flag,next,generation]{if(flag->load()&&generation==policy.generation)startEpisode(next);});}else{status=index+1==(int)episodes.size()?"本剧已播放完毕":"本集已结束，自动连播已关闭";showMenu(true);}}}
@@ -128,7 +171,9 @@ public:
     const auto factor=brls::Application::getPlatform()->getVideoContext()->getScaleFactor();nvgBeginFrame(vg,brls::Application::windowWidth,brls::Application::windowHeight,factor);nvgScale(vg,brls::Application::windowScale,brls::Application::windowScale);
     nvgFontFaceId(vg,brls::Application::getDefaultFont());nvgFontSize(vg,22);nvgFillColor(vg,nvgRGBA(255,255,255,240));nvgTextAlign(vg,NVG_ALIGN_LEFT|NVG_ALIGN_TOP);
     const std::string title=series.value("title",std::string())+" · 第 "+std::to_string(index+1)+" 集";nvgTextBox(vg,28,20,1224,title.c_str(),nullptr);if(!status.empty())nvgTextBox(vg,60,180,1160,status.c_str(),nullptr);
-    if(menuVisible){const double rates[]={0.75,1,1.25,1.5,2};const std::string text="第 "+std::to_string(index+1)+" / "+std::to_string(episodes.size())+" 集  ·  "+clockText(position)+" / "+clockText(duration)+"  ·  "+(errorState?"播放失败":!loaded?"连接中":paused?"已暂停":"播放中")+"  ·  连播"+(policy.continuous?"开":"关")+"  ·  倍速 "+std::to_string(rates[speedIndex]).substr(0,4)+"  ·  方向 "+std::to_string(rotation)+"°";if(text!=lastProgress){lastProgress=text;progress->setText(text);}brls::Box::draw(vg,x,y,w,h,style,ctx);}else{nvgFontSize(vg,18);nvgText(vg,28,684,"点屏幕或 X 打开菜单  ·  A 暂停  ·  L/R 选集  ·  B 返回",nullptr);}
+    timeline->update(position,duration,loaded&&!errorState&&!failed);if(holdApplied){nvgTextAlign(vg,NVG_ALIGN_CENTER|NVG_ALIGN_TOP);nvgText(vg,640,90,"2倍速播放中 · 松开恢复",nullptr);}
+    if(menuVisible){const double rates[]={0.75,1,1.25,1.5,2};const std::string text="第 "+std::to_string(index+1)+" / "+std::to_string(episodes.size())+" 集  ·  "+clockText(position)+" / "+clockText(duration)+"  ·  "+(errorState?"播放失败":!loaded?"连接中":paused?"已暂停":"播放中")+"  ·  连播"+(policy.continuous?"开":"关")+"  ·  倍速 "+std::to_string(rates[speedIndex]).substr(0,4)+"  ·  方向 "+std::to_string(rotation)+"°";if(text!=lastProgress){lastProgress=text;progress->setText(text);}}else{nvgFontSize(vg,16);nvgTextAlign(vg,NVG_ALIGN_LEFT|NVG_ALIGN_TOP);nvgText(vg,28,618,"点屏幕 / X 菜单  ·  长按画面 2倍速  ·  A 暂停  ·  L/R 选集  ·  B 返回",nullptr);}
+    brls::Box::draw(vg,x,y,w,h,style,ctx);
   }
 };
 

@@ -1,18 +1,18 @@
 # 红果短剧Switch客户端
 
-Switch 第一代 / Lite / OLED 的原生自制应用。版本 0.1.5 为试验版。
+Switch 第一代 / Lite / OLED 的原生自制应用。版本 0.1.6 为试验版。
 仓库名称为 `hongguo-switch`，软件内名称为「红果短剧」。图标沿用用户提供的图片。无需电脑端服务，使用 libnx、Borealis、QuickJS 和 libmpv。
 
-**0.1.5 试验版：封面宫格、触屏点击、中文字体、横向选集和播放控制菜单。**
-用户已确认 0.1.3 可以播放，但部分分集接口返回“未知异常”。0.1.5 每次重试都会重新获取播放源，失败后最多自动重试 3 次（间隔 2 / 4 / 6 秒）；仍不可用的分集会显示错误并保留手动重试。内容源不可用时，客户端无法保证该分集可播放。
+**0.1.6 试验版：封面宫格、触屏点击、中文字体、横向选集和播放控制菜单。**
+用户已确认 0.1.3 可以播放，但部分分集接口返回“未知异常”。0.1.6 每次重试都会重新获取播放源，失败后最多自动重试 3 次（间隔 2 / 4 / 6 秒）；仍不可用的分集会显示错误并保留手动重试。内容源不可用时，客户端无法保证该分集可播放。
 
-0.1.5 的新增界面、触屏、视频旋转和自动连播仍待实机复测。
+0.1.6 的新增界面、触屏、视频旋转和自动连播仍待实机复测。
 每次启动会生成 `sdmc:/switch/hongguo-saf/runtime.log`，记录接口、页面构建、图片下载/解码/纹理上传的阶段。日志不含视频地址、密钥或账户内容。若仍崩溃，请在再次启动前保存日志，并提供最新的 `sdmc:/atmosphere/crash_reports/` 报告。
 
 ## 下载
 
-[NSP 直接下载](https://github.com/zqzhuhai-commits/hongguo-switch/releases/download/v0.1.5-alpha.1/Hongguo-Switch-0.1.5-alpha.1.nsp)
-· [发布说明及校验文件](https://github.com/zqzhuhai-commits/hongguo-switch/releases/tag/v0.1.5-alpha.1)
+[NSP 直接下载](https://github.com/zqzhuhai-commits/hongguo-switch/releases/download/v0.1.6-alpha.1/Hongguo-Switch-0.1.6-alpha.1.nsp)
+· [发布说明及校验文件](https://github.com/zqzhuhai-commits/hongguo-switch/releases/tag/v0.1.6-alpha.1)
 
 软件内名称为「红果短剧」。NSP 的 Title ID 为 `0100F00D53414600`。
 验证记录见 `docs/Switch-verification.json`。NSP 在本地打包，密钥未上传；GitHub 工作流仅发布完成的安装包。
@@ -66,10 +66,14 @@ node tests/adapter_refresh.cjs
 Borealis（Apache-2.0）、QuickJS（MIT）、Buffer（MIT）及 sm-crypto（MIT）保留各自许可证。
 MPV / FFmpeg 和其他 portlibs 的许可证依其实际构建配置提供；构建会固定源代码提交。
 
-### 0.1.5 媒体加载修正
+### 0.1.6 媒体加载修正
 
 允许明文 MP4 的 moov 位于文件尾或 free/mdat 之后；媒体 Range 校验起点、终点和总长，允许最后一段短于请求长度。分段下载失败先重试同一段一次；APP 资源主地址不可用时尝试接口提供的备用地址和其他兼容清晰度（最多三档）。官网视频严格匹配分集 ID，避免把推荐视频当作本集。测试覆盖上述传输与解析场景；未完成新增版本的 Switch 实机验证，内容源不返回播放地址时仍可能失败。
 
 参考文件 tv.nro 的静态检查记录见 [播放器检查](docs/player-reference.md)。
 
-0.1.5 另修正官网首集的 canonical schema 匹配：首集页面 ID 可以是剧 ID，而分集身份从官网 `/video/public/<分集ID>/...mp4` 验证；首集使用 `/player/<剧ID>`，后续集使用双 ID 路由。官网媒体使用浏览器 User-Agent 和对应播放页 Referer。`tests/official_first_episode.cjs` 专门覆盖用户反馈的《首辅娇娘》第一集。
+0.1.6 另修正官网首集的 canonical schema 匹配：首集页面 ID 可以是剧 ID，而分集身份从官网 `/video/public/<分集ID>/...mp4` 验证；首集使用 `/player/<剧ID>`，后续集使用双 ID 路由。官网媒体使用浏览器 User-Agent 和对应播放页 Referer。`tests/official_first_episode.cjs` 专门覆盖用户反馈的《首辅娇娘》第一集。
+
+### 0.1.6 播放交互
+
+底部常驻显示时间与进度条。触摸任意位置或拖动后松开跳转，拖动中显示目标时间，松开只提交一次跳转；进度条获得焦点后左右键每次前后 5 秒，上键打开菜单。未知时长或播放失败时禁用跳转。长按播放画面 400ms 临时使用 2 倍速，松开、取消、切集、重试、退出或暂停时恢复长按前的实际倍速；拖动进度条和点击菜单按钮不会触发倍速，短点仍开关菜单。新增交互待 Switch 实机验证。
