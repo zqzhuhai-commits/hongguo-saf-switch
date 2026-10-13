@@ -1,61 +1,31 @@
 {
   "name": "红果短剧",
-  "version": "0.1.6-alpha.1",
+  "version": "0.1.7-alpha.1",
   "titleId": "0100F00D53414600",
   "nspBytes": 21703384,
-  "sha256": "a7b456b0d30026775a3981988d56dbb46e6501a6af590ec65731baf73aa02581",
+  "sha256": "90b3049ff2a5be33a11625d7e5285dae016de710fb0d238f1d52efd721a7e18d",
   "ncaTypes": [
+    0,
     2,
-    1,
-    0
+    1
   ],
   "containerChecksPassed": true,
   "privateKeyScanPassed": true,
-  "sourceCommit": "1310101a1a574ab63ce99d1956eb2129eb98dcf3",
+  "sourceCommit": "76cd9b5ef647f1ecbd41d7800f0e02d863623781",
   "hardwareTested": false,
   "validation": "NSP PFS0 entries, NCA content hashes, decrypted NCA headers, title IDs, app/control/meta types, and embedded key scan",
-  "buildRun": 38384835172,
-  "debugSymbolsArtifact": 11804872356,
+  "buildRun": 38386995083,
+  "debugSymbolsArtifact": 11807206642,
   "previousUserReportedPlaybackVersion": "0.1.5-alpha.1",
   "currentVersionHardwareTested": false,
-  "regressionChecks": {
-    "holdThresholdMs": 400,
-    "singleHoldActivationPassed": true,
-    "holdCancellationPassed": true,
-    "controlAndTimelineExclusionPassed": true,
-    "touchMovementRejectionPassed": true,
-    "seekCoordinateClampingPassed": true,
-    "unknownDurationSeekDisabledPassed": true
-  },
-  "officialFirstEpisodeLiveProbe": {
-    "seriesId": "7686713195246930968",
-    "episodeId": "7686715217652223038",
-    "hardwareTested": false,
-    "liveProbePassed": true,
-    "canonicalSchemaUsesSeriesId": true,
-    "ranges": [
-      {
-        "start": 0,
-        "bytes": 262144,
-        "total": 15152274,
-        "status": 206,
-        "rangePassed": true
-      },
-      {
-        "start": 1048576,
-        "bytes": 1024,
-        "total": 15152274,
-        "status": 206,
-        "rangePassed": true
-      }
-    ],
-    "publicMP4HeaderPassed": true
-  },
   "touchControls": {
-    "timelineAlwaysVisible": true,
+    "timelineAlwaysVisible": false,
+    "timelineInitiallyHidden": true,
+    "timelineFollowsControlsVisibility": true,
+    "hiddenTimelineRegionDoesNotBlockVideoGestures": true,
     "seekCommitsOnRelease": true,
     "temporaryHoldRate": 2,
     "restorePreviousActualRate": true
   },
-  "notes": "Native build, local touch-policy regression, artifact digest and NSP checks passed. Media adapter is byte-for-byte identical to 0.1.5, whose playback the user confirmed. Actual Switch timeline dragging, gesture cancellation and MPV speed restoration remain unverified on device."
+  "notes": "Native compilation, artifact integrity and NSP validation passed. Timeline visibility follows the menu; its hidden region is excluded from control hit handling. Display and touch interactions await Switch hardware verification."
 }

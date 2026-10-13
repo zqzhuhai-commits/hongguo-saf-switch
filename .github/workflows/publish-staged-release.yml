@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 5e79c27c7687a421d26ee777a86b1c9dfdc8860b
+          ref: cbd9457fb5eef81dc6d9a4692092f3e52a28ac3b
           persist-credentials: false
       - name: Assemble and publish verified NSP
         env:
@@ -22,14 +22,14 @@ jobs:
           set -euo pipefail
           if [ ! -d .release-parts/nsp ]; then echo 'No staged package; nothing to publish.'; exit 0; fi
           mkdir -p /tmp/release
-          cat .release-parts/nsp/part-* > /tmp/release/Hongguo-Switch-0.1.6-alpha.1.nsp
+          cat .release-parts/nsp/part-* > /tmp/release/Hongguo-Switch-0.1.7-alpha.1.nsp
           cp .release-parts/Switch-verification.json /tmp/release/
           cd /tmp/release
-          sha256sum Hongguo-Switch-0.1.6-alpha.1.nsp > SHA256SUMS
+          sha256sum Hongguo-Switch-0.1.7-alpha.1.nsp > SHA256SUMS
           expected=$(python3 -c 'import json; print(json.load(open("Switch-verification.json"))["sha256"])')
-          actual=$(sha256sum Hongguo-Switch-0.1.6-alpha.1.nsp | cut -d' ' -f1)
+          actual=$(sha256sum Hongguo-Switch-0.1.7-alpha.1.nsp | cut -d' ' -f1)
           test "$expected" = "$actual"
-          gh release create v0.1.6-alpha.1 Hongguo-Switch-0.1.6-alpha.1.nsp SHA256SUMS Switch-verification.json \
+          gh release create v0.1.7-alpha.1 Hongguo-Switch-0.1.7-alpha.1.nsp SHA256SUMS Switch-verification.json \
             --repo "$GH_REPO" --target "$RELEASE_TARGET" \
-            --title '红果短剧Switch客户端 v0.1.6' --prerelease \
-            --notes '0.1.6：底部常驻播放时间与进度条，点击或拖动后松开跳转；拖动显示目标时间，未知时长时禁用跳转。长按播放画面约 0.4 秒临时 2 倍速，松开、取消、切集、重试、暂停和退出时恢复此前实际倍速。菜单和进度条区域不触发长按倍速。进度条焦点下左右键前后 5 秒，上键打开菜单。保留用户已确认可播放的 0.1.5 官网源加载实现。原生编译、交互状态逻辑与安装包检查通过；新增触屏操作仍待 Switch 实机验证。'
+            --title '红果短剧Switch客户端 v0.1.7' --prerelease \
+            --notes '0.1.7：进度条默认隐藏，点击播放画面或按 X 时与控制菜单一起显示，再次点击画面、按 B 或选择隐藏菜单后隐藏。不可见的进度条不占用触屏区域。保留拖动跳转和长按临时 2 倍速、松开恢复原速度。原生编译、安装包完整性和元数据检查通过；新的显示行为仍待 Switch 实机复测。'
