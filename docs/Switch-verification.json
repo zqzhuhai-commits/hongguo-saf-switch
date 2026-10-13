@@ -1,22 +1,30 @@
 {
   "name": "红果短剧",
-  "version": "0.1.2-alpha.1",
+  "version": "0.1.3-alpha.1",
   "titleId": "0100F00D53414600",
-  "nspBytes": 21660888,
-  "sha256": "d4fc747a1824047ed7e86444c8cbd4d3966795a6bae75c3eb26a7007d0e3ab02",
+  "nspBytes": 21681368,
+  "sha256": "631d5f574e4ecbe01027f7ad43ca78cf4ab2f59feb956fd0f9fab37de964d93e",
   "ncaTypes": [
     1,
-    2,
-    0
+    0,
+    2
   ],
   "containerChecksPassed": true,
   "privateKeyScanPassed": true,
-  "sourceCommit": "bf9690f3e9d204dfc7a9cad107114882e47f173f",
+  "sourceCommit": "1855766665159ea49bb28bc9f2bfb367bf45b158",
   "hardwareTested": false,
   "validation": "NSP PFS0 entries, NCA content hashes, decrypted NCA headers, title IDs, app/control/meta types, and embedded key scan",
-  "githubDisplayName": "红果短剧Switch客户端",
-  "nativeArchitecture": "AArch64",
-  "hardwareTestedByDeveloper": false,
-  "onDevicePlaybackVerified": false,
-  "notes": "The user reported v0.1.1 launched and loaded catalogs, but crashed when entering any item. v0.1.2 fixes AppletFrame stack initialization and refreshes the home dashboard. Hardware retest remains pending."
+  "diagnosticLog": "sdmc:/switch/hongguo-saf/runtime.log",
+  "buildRun": 38374574675,
+  "debugSymbolsArtifact": 11800825997,
+  "hostRegression": {
+    "parallelCatalogCalls": 12,
+    "itemsPerCall": 1000,
+    "pngDecodes": 12,
+    "explicitWorkerStackBytes": 2097152,
+    "exceptionPropagation": true,
+    "shutdownJoined": true
+  },
+  "notes": "Diagnostic candidate; on-device startup and playback are not yet verified.",
+  "hardwareCrashFixVerified": false
 }
