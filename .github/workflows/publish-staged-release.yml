@@ -25,6 +25,6 @@ jobs:
           actual=$(sha256sum Hongguo-Switch-0.1.3-alpha.1.nsp | cut -d' ' -f1)
           test "$expected" = "$actual"
           gh release create v0.1.3-alpha.1 Hongguo-Switch-0.1.3-alpha.1.nsp SHA256SUMS Switch-verification.json \
-            --repo "$GH_REPO" --target b8b7e3134594801a81b141f550d05677e2e861cc \
+            --repo "$GH_REPO" --target 1855766665159ea49bb28bc9f2bfb367bf45b158 \
             --title '红果短剧Switch客户端 v0.1.3' --prerelease \
             --notes '针对启动约3秒闪退的诊断试验版：接口与封面改用固定2 MiB栈工作线程，接口请求统一调度，首页分类分别加载，新增本机runtime.log。尚未在Switch实机复测，崩溃根因待日志确认。安装包结构与密钥扫描校验通过。'
