@@ -1,7 +1,7 @@
-# 红果短剧Switch客户端SAF版
+# 红果短剧Switch客户端
 
 Switch 第一代 / Lite / OLED 的原生自制应用。版本 0.1.0 为试验版。
-名称和图标由用户指定。无需电脑端服务，使用 libnx、Borealis、QuickJS 和 libmpv。
+仓库目标名称为 `hongguo-switch`，软件内名称为「红果短剧」。图标沿用用户提供的图片。无需电脑端服务，使用 libnx、Borealis、QuickJS 和 libmpv。
 
 **当前不宣称已在 Switch 实机播放验收，也不宣称已验证系统 22.5.0 的兼容性。**
 
