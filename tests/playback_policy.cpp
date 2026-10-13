@@ -1,0 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#include "playback_policy.hpp"
+#include <cassert>
+int main(){PlaybackPolicy p;p.begin();auto first=p.generation;assert(p.scheduleRetry()==2000);assert(!p.scheduleRetry());assert(!p.consumeRetry(first+1));assert(p.consumeRetry(first));assert(!p.consumeRetry(first));p.begin(true);auto second=p.generation;assert(p.scheduleRetry()==4000);assert(p.consumeRetry(second));p.begin(true);auto third=p.generation;assert(p.scheduleRetry()==6000);assert(p.consumeRetry(third));p.begin(true);assert(!p.scheduleRetry());p.begin();assert(p.retries==0);assert(p.scheduleRetry()==2000);auto stale=p.generation;p.begin();assert(!p.consumeRetry(stale));assert(p.nextEpisode(0,3)==1);assert(p.nextEpisode(2,3)==-1);assert(p.nextEpisode(-1,3)==-1);p.continuous=false;assert(p.nextEpisode(0,3)==-1);}
