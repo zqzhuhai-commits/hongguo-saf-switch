@@ -1,31 +1,29 @@
 {
   "name": "红果短剧",
-  "version": "0.1.7-alpha.1",
+  "version": "0.1.8-alpha.1",
   "titleId": "0100F00D53414600",
-  "nspBytes": 21703384,
-  "sha256": "90b3049ff2a5be33a11625d7e5285dae016de710fb0d238f1d52efd721a7e18d",
+  "nspBytes": 21702360,
+  "sha256": "4228c8d8e1415d53c5b9e11250cc7570f0b98e67bc81afbdd0bf17bc413cbd8c",
   "ncaTypes": [
-    0,
+    1,
     2,
-    1
+    0
   ],
   "containerChecksPassed": true,
   "privateKeyScanPassed": true,
-  "sourceCommit": "76cd9b5ef647f1ecbd41d7800f0e02d863623781",
+  "sourceCommit": "adea3b5ec40c1a9e46670691bdf3f8602e4015c1",
   "hardwareTested": false,
   "validation": "NSP PFS0 entries, NCA content hashes, decrypted NCA headers, title IDs, app/control/meta types, and embedded key scan",
-  "buildRun": 38386995083,
-  "debugSymbolsArtifact": 11807206642,
-  "previousUserReportedPlaybackVersion": "0.1.5-alpha.1",
+  "buildRun": 38388502685,
+  "debugSymbolsArtifact": 11807039601,
   "currentVersionHardwareTested": false,
-  "touchControls": {
-    "timelineAlwaysVisible": false,
-    "timelineInitiallyHidden": true,
-    "timelineFollowsControlsVisibility": true,
-    "hiddenTimelineRegionDoesNotBlockVideoGestures": true,
-    "seekCommitsOnRelease": true,
-    "temporaryHoldRate": 2,
-    "restorePreviousActualRate": true
+  "displayChange": {
+    "hintFontSize": 16,
+    "hintFontSizeUnchanged": true,
+    "hintHorizontalPositionUnchanged": true,
+    "hintColorUnchanged": true,
+    "hintBottomAlignment": true,
+    "hintBottomMarginLogicalPixels": 4
   },
-  "notes": "Native compilation, artifact integrity and NSP validation passed. Timeline visibility follows the menu; its hidden region is excluded from control hit handling. Display and touch interactions await Switch hardware verification."
+  "notes": "Native build, artifact integrity and NSP validation passed. Only the playback hints vertical position/alignment changes; font size, color and left margin are retained. Appearance awaits Switch hardware verification."
 }
