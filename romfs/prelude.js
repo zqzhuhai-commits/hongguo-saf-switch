@@ -1,5 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 globalThis.Buffer = SwitchDeps.Buffer;
+// Browserify's core Buffer shim lacks the Node BigInt methods used by Helios.
+for(const little of [true,false]){
+  const suffix=little?'LE':'BE';
+  Buffer.prototype['readBigUInt64'+suffix]=function(offset=0){
+    if(!Number.isInteger(offset)||offset<0||offset+8>this.length)throw new RangeError('Buffer bounds');
+    let value=0n;for(let i=0;i<8;i++)value|=BigInt(this[offset+i])<<BigInt((little?i:7-i)*8);return value;
+  };
+  Buffer.prototype['writeBigUInt64'+suffix]=function(value,offset=0){
+    if(!Number.isInteger(offset)||offset<0||offset+8>this.length||value<0n||value>0xffffffffffffffffn)throw new RangeError('Buffer bounds');
+    for(let i=0;i<8;i++)this[offset+i]=Number((value>>BigInt((little?i:7-i)*8))&255n);return offset+8;
+  };
+}
 globalThis.console = {log(){},warn(){},error(){}};
 globalThis.log = ()=>{};
 class URLSearchParams {

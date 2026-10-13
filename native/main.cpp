@@ -27,7 +27,7 @@ static void record(const Json& series,const Json& episode,int index,double secon
 static void message(const std::string& text){auto* dialog=new brls::Dialog(text);dialog->addButton("确定",[]{});dialog->open();}
 static void back(brls::View* view){view->registerAction("返回",brls::BUTTON_B,[](brls::View*){brls::Application::popActivity();return true;});}
 static brls::DetailCell* cell(const std::string& name,const std::string& note,std::function<void()> fn){auto* v=new brls::DetailCell();v->setText(name);v->setDetailText(note);v->registerClickAction([fn](brls::View*){fn();return true;});return v;}
-class SceneFrame:public brls::AppletFrame {public:std::shared_ptr<bool> alive=std::make_shared<bool>(true);~SceneFrame(){*alive=false;}};
+class SceneFrame:public brls::AppletFrame {public:using brls::AppletFrame::setContentView;std::shared_ptr<bool> alive=std::make_shared<bool>(true);~SceneFrame(){*alive=false;}};
 static SceneFrame* frame(brls::Box* list,const std::string& title){auto* scroll=new brls::ScrollingFrame();scroll->setGrow(1);list->setPadding(20,50,30,50);scroll->setContentView(list);auto* f=new SceneFrame();f->setTitle(title);f->setContentView(scroll);back(f);return f;}
 struct Reader{std::string id;int64_t total=0,pos=0,cacheAt=-1;std::vector<unsigned char> cache;std::atomic<bool> cancelled{false};};
 static int64_t readStream(void* data,char* out,uint64_t size){auto* r=(Reader*)data;if(r->cancelled)return -1;if(r->pos>=r->total)return 0;try{

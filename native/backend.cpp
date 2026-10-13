@@ -67,9 +67,9 @@ Backend::~Backend(){if(context)JS_FreeContext(context);if(runtime)JS_FreeRuntime
 Json Backend::call(const std::string& function,const Json& args){
   std::lock_guard<std::mutex> guard(lock);JS_UpdateStackTop(runtime);
   if(function!="home"&&function!="search"&&function!="detail"&&function!="open"&&function!="read"&&function!="selftest")throw std::runtime_error("Invalid method");
-  evaluate("globalThis.__done=false;globalThis.__answer='';Promise.resolve(SwitchAPI["+Json(function).dump()+"](..."+args.dump()+")).then(v=>{globalThis.__answer=JSON.stringify({ok:true,value:v});globalThis.__done=true;},e=>{globalThis.__answer=JSON.stringify({ok:false});globalThis.__done=true;});","rpc");
+  evaluate("globalThis.__done=false;globalThis.__answer='';Promise.resolve(SwitchAPI["+Json(function).dump()+"](..."+args.dump()+")).then(v=>{globalThis.__answer=JSON.stringify({ok:true,value:v});globalThis.__done=true;},e=>{globalThis.__answer=JSON.stringify({ok:false,message:String(e&&(e.stack||e.message)||'接口处理失败').replace(/https?:\\/\\/[^ ]+/g,'[URL]').slice(0,700)});globalThis.__done=true;});","rpc");
   JSContext* job=nullptr;const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(120);
-  while(true){JSValue global=JS_GetGlobalObject(context);JSValue done=JS_GetPropertyStr(context,global,"__done");bool complete=JS_ToBool(context,done);JS_FreeValue(context,done);if(complete){JSValue answer=JS_GetPropertyStr(context,global,"__answer");std::string raw=text(context,answer);JS_FreeValue(context,answer);JS_FreeValue(context,global);Json result=Json::parse(raw);if(!result.value("ok",false))throw std::runtime_error("内容源或网络暂不可用");return result["value"];}JS_FreeValue(context,global);
+  while(true){JSValue global=JS_GetGlobalObject(context);JSValue done=JS_GetPropertyStr(context,global,"__done");bool complete=JS_ToBool(context,done);JS_FreeValue(context,done);if(complete){JSValue answer=JS_GetPropertyStr(context,global,"__answer");std::string raw=text(context,answer);JS_FreeValue(context,answer);JS_FreeValue(context,global);Json result=Json::parse(raw);if(!result.value("ok",false))throw std::runtime_error(result.value("message",std::string("内容源或网络暂不可用")));return result["value"];}JS_FreeValue(context,global);
     if(std::chrono::steady_clock::now()>deadline||JS_ExecutePendingJob(runtime,&job)<=0)throw std::runtime_error("接口处理失败");
   }
 }
