@@ -16,7 +16,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/release
-          cat .release-parts/nsp/*.part > /tmp/release/Hongguo-Switch-0.1.2-alpha.1.nsp
+          cat .release-parts/nsp/part-* > /tmp/release/Hongguo-Switch-0.1.2-alpha.1.nsp
           cp .release-parts/Switch-verification.json /tmp/release/
           cd /tmp/release
           sha256sum Hongguo-Switch-0.1.2-alpha.1.nsp > SHA256SUMS
