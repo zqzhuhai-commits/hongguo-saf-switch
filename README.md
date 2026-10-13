@@ -11,8 +11,8 @@ Switch 第一代 / Lite / OLED 的原生自制应用。版本 0.1.6 为试验版
 
 ## 下载
 
-[NSP 直接下载](https://github.com/zqzhuhai-commits/hongguo-switch/releases/download/v0.1.7-alpha.1/Hongguo-Switch-0.1.7-alpha.1.nsp)
-· [发布说明及校验文件](https://github.com/zqzhuhai-commits/hongguo-switch/releases/tag/v0.1.7-alpha.1)
+[NSP 直接下载](https://github.com/zqzhuhai-commits/hongguo-switch/releases/download/v0.1.8-alpha.1/Hongguo-Switch-0.1.8-alpha.1.nsp)
+· [发布说明及校验文件](https://github.com/zqzhuhai-commits/hongguo-switch/releases/tag/v0.1.8-alpha.1)
 
 软件内名称为「红果短剧」。NSP 的 Title ID 为 `0100F00D53414600`。
 验证记录见 `docs/Switch-verification.json`。NSP 在本地打包，密钥未上传；GitHub 工作流仅发布完成的安装包。
@@ -81,3 +81,7 @@ MPV / FFmpeg 和其他 portlibs 的许可证依其实际构建配置提供；构
 ### 0.1.7 进度条显示调整
 
 进度条不再常驻，与控制菜单同时显示或隐藏。隐藏后其原位置可正常点击画面或长按倍速，不会被不可见的进度条占用。
+
+### 0.1.8 操作提示位置
+
+播放操作提示使用 14 号字、底部对齐，放在屏幕下边缘上方 4 像素，不再占用原来距离底部约 100 像素的位置；菜单、进度条和触屏手势维持原有操作方式。显示位置待实机复测。
