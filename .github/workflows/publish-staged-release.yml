@@ -1,7 +1,7 @@
 name: Publish staged Switch NSP
 on:
   push:
-    branches: [codex-release-v0.1.2]
+    branches: [codex-release-v0.1.3]
 permissions:
   contents: write
 jobs:
@@ -17,14 +17,14 @@ jobs:
           set -euo pipefail
           if [ ! -d .release-parts/nsp ]; then echo 'No staged package; nothing to publish.'; exit 0; fi
           mkdir -p /tmp/release
-          cat .release-parts/nsp/part-* > /tmp/release/Hongguo-Switch-0.1.2-alpha.1.nsp
+          cat .release-parts/nsp/part-* > /tmp/release/Hongguo-Switch-0.1.3-alpha.1.nsp
           cp .release-parts/Switch-verification.json /tmp/release/
           cd /tmp/release
-          sha256sum Hongguo-Switch-0.1.2-alpha.1.nsp > SHA256SUMS
+          sha256sum Hongguo-Switch-0.1.3-alpha.1.nsp > SHA256SUMS
           expected=$(python3 -c 'import json; print(json.load(open("Switch-verification.json"))["sha256"])')
-          actual=$(sha256sum Hongguo-Switch-0.1.2-alpha.1.nsp | cut -d' ' -f1)
+          actual=$(sha256sum Hongguo-Switch-0.1.3-alpha.1.nsp | cut -d' ' -f1)
           test "$expected" = "$actual"
-          gh release create v0.1.2-alpha.1 Hongguo-Switch-0.1.2-alpha.1.nsp SHA256SUMS Switch-verification.json \
-            --repo "$GH_REPO" --target bf9690f3e9d204dfc7a9cad107114882e47f173f \
-            --title '红果短剧Switch客户端 v0.1.2' --prerelease \
-            --notes '修复进入列表项目闪退，并重做首页：加入接着看、热播短剧及人气漫剧海报栏。适用于大气层环境，待设备实测。SHA256 与结构验证报告随包附上。'
+          gh release create v0.1.3-alpha.1 Hongguo-Switch-0.1.3-alpha.1.nsp SHA256SUMS Switch-verification.json \
+            --repo "$GH_REPO" --target b8b7e3134594801a81b141f550d05677e2e861cc \
+            --title '红果短剧Switch客户端 v0.1.3' --prerelease \
+            --notes '针对启动约3秒闪退的诊断试验版：接口与封面改用固定2 MiB栈工作线程，接口请求统一调度，首页分类分别加载，新增本机runtime.log。尚未在Switch实机复测，崩溃根因待日志确认。安装包结构与密钥扫描校验通过。'
