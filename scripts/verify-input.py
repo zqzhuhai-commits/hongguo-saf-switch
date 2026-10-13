@@ -7,7 +7,11 @@ import sys
 
 root = Path(sys.argv[1]).resolve()
 assert (root / 'exefs/main').read_bytes()[:4] == b'NSO0'
-assert (root / 'exefs/main.npdm').read_bytes()[:4] == b'META'
+npdm = (root / 'exefs/main.npdm').read_bytes()
+assert npdm[:4] == b'META'
+aci = struct.unpack_from('<I', npdm, 0x70)[0]
+assert npdm[aci:aci+4] == b'ACI0'
+assert struct.unpack_from('<Q', npdm, aci+0x10)[0] == 0x0100F00D53414600
 nacp = (root / 'control/control.nacp').read_bytes()
 assert len(nacp) == 0x4000
 name = nacp[:0x200].split(b'\0', 1)[0].decode('utf-8')

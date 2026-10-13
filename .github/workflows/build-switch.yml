@@ -29,7 +29,9 @@ jobs:
           test -s build/hongguo-saf-switch.nro
           /opt/devkitpro/devkitA64/bin/aarch64-none-elf-readelf -h build/hongguo-saf-switch.elf
           python3 scripts/verify-input.py build/package
-      - uses: actions/upload-artifact@v4
+          dkp-pacman -Q > build/package/BUILD-PACKAGES.txt
+          cp -r licenses build/package/romfs/licenses
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: switch-package-input
           path: |

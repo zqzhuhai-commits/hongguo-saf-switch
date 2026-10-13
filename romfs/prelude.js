@@ -51,4 +51,4 @@ async function request(url,options={}){
   return {status:response.status,headers:response.headers,data:options.responseType==='arraybuffer'?bytes:bytes.toString('utf8')};
 }
 globalThis.axios=request;
-axios.post=(url,body,options={})=>request(url,{...options,method:'POST',body:typeof body==='string'?body:JSON.stringify(body)});
+axios.post=(url,body,options={})=>request(url,{...options,method:'POST',body:Buffer.isBuffer(body)?body.toString('utf8'):typeof body==='string'?body:JSON.stringify(body)});
