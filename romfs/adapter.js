@@ -3,6 +3,22 @@ const validId=id=>typeof id==='string'&&/^\d{1,30}$/.test(id);
 const card=row=>({id:String(row.url),title:String(row.title||''),cover:String(row.img||''),description:String(row.content||''),badge:String(row.desc||''),tags:String(row.tname||'')});
 const cards=rows=>[...new Map(Array.from(rows,card).filter(r=>validId(r.id)&&r.title).map(r=>[r.id,r])).values()];
 const episodeSeries = new Map();
+async function publicComicPage(page) {
+  const html=await getText(`${SITE}/rank/hot-comic-drama?page=${page}`);
+  for(const match of html.matchAll(/<script\b[^>]*data-fn-name="([^"]+)"[^>]*data-fn-args="([^"]+)"[^>]*>/g)) {
+    let args;try{args=JSON.parse(decodeHtml(match[2]));}catch(_){continue;}
+    if(args[0]!=='rank_hot-comic-drama/page')continue;
+    let value;
+    if(match[1]==='r' && args[1]==='content')value=args[2];
+    if(match[1]==='mergeLoaderData' && Array.isArray(args[1]))value=args[1].find(v=>v.key==='content' && v.routerDataFnName==='p')?.routerDataFnArgs?.[0];
+    if(typeof value==='string')try{value=JSON.parse(value);}catch(_){continue;}
+    if(!value?.isSuccess || !Array.isArray(value.rankList))continue;
+    const pages=Math.min(Number(value.pagination?.totalPages || 0),100);
+    if(pages<1 || Number(value.pagination.pageNum || page)!==page)throw new Error('漫剧分页信息异常');
+    return {items:cards(value.rankList.map(rankItemToCard)),page,hasMore:page<pages};
+  }
+  throw new Error('漫剧榜单数据暂不可用');
+}
 async function publicWebStream(id) {
   const sid = episodeSeries.get(id) || '_';
   const html = await api.getText(`${SITE}/player/${sid}/${id}`);
@@ -67,7 +83,7 @@ const provider = {
   async home(page = 1, type = 'comic') {
     if(type==='comic'){
       try {const r=await appSearchPage('热门',19,page,24);return {items:cards(r.list),page,hasMore:r.hasMore};}
-      catch (_) {const r=await rankPage('hot-comic-drama',page);return {items:cards(r.list),page,hasMore:page<Math.min(Number(r.pagination.totalPages||1),100)};}
+      catch (_) {return publicComicPage(page);}
     }
     const data = await api.categoryPage('tab=1&sort_type=1',page);
     const section = data?.loaderData?.category_page || data?.loaderData?.['category_$'];
