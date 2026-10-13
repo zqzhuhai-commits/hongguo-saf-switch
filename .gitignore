@@ -1,0 +1,10 @@
+/dependencies/
+/build/
+/dist/
+*.keys
+*.dat
+keys.*
+*.nsp
+*.nro
+*.nca
+/private/

@@ -1,0 +1,38 @@
+name: Build Switch native client
+on:
+  push:
+    branches: [main]
+    paths: ['native/**', 'romfs/**', 'CMakeLists.txt', 'scripts/**', 'npdm.json', 'icon.jpg', '.github/workflows/build-switch.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    container: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Fetch pinned development dependencies
+        run: sh scripts/fetch-deps.sh
+      - name: Configure and build native app
+        run: |
+          cmake -S . -B build -DPLATFORM_SWITCH=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target package-input -j2
+      - name: Inspect binaries and package inputs
+        run: |
+          test -s build/package/exefs/main
+          test -s build/package/exefs/main.npdm
+          test -s build/package/control/control.nacp
+          test -s build/hongguo-saf-switch.nro
+          /opt/devkitpro/devkitA64/bin/aarch64-none-elf-readelf -h build/hongguo-saf-switch.elf
+          python3 scripts/verify-input.py build/package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: switch-package-input
+          path: |
+            build/package/
+            build/hongguo-saf-switch.nro
+          retention-days: 7
