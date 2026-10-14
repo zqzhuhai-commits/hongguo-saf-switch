@@ -10,7 +10,7 @@ function context(){
   ctx.getText=async()=>`<script type="application/ld+json">${JSON.stringify({'@type':'VideoObject',about:{'@id':'https://example.test/player/0/1'},contentUrl:'https://example.test/video.mp4'})}</script>`;
   ctx.decryptPartial=(data)=>data;ctx.qualityNumber=Number;ctx.qualityLabel=String;
   ctx.axios=async(_url,opts)=>{const [a,b]=opts.headers.Range.slice(6).split('-').map(Number),end=Math.min(b,media.length-1);return {status:206,headers:{'content-range':`bytes ${a}-${end}/${media.length}`},data:media.subarray(a,end+1)};};
-  vm.createContext(ctx);vm.runInContext(source,ctx);return ctx;
+  ctx.SwitchConfig={source:'web'};vm.createContext(ctx);vm.runInContext(source,ctx);return ctx;
 }
 (async()=>{
   let ctx=context(),ranges=[];const transport=ctx.axios;

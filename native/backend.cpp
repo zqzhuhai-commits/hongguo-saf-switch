@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "backend.hpp"
+#include "app_config.hpp"
 #include "workers.hpp"
 #include <curl/curl.h>
 #include <mbedtls/md5.h>
@@ -63,6 +64,7 @@ void Backend::evaluate(const std::string& script,const char* name){JSValue value
 Backend::Backend(){
   runtime=JS_NewRuntime();if(!runtime)throw std::runtime_error("Runtime init");JS_SetMemoryLimit(runtime,256*1024*1024);JS_SetMaxStackSize(runtime,256*1024);context=JS_NewContext(runtime);if(!context)throw std::runtime_error("Context init");
   JSValue global=JS_GetGlobalObject(context);JS_SetPropertyStr(context,global,"__hash",JS_NewCFunction(context,hashFn,"__hash",2));JS_SetPropertyStr(context,global,"__aes",JS_NewCFunction(context,aesFn,"__aes",4));JS_SetPropertyStr(context,global,"__http",JS_NewCFunction(context,httpFn,"__http",4));JS_FreeValue(context,global);
+  auto config=AppConfig::load();const auto source=config.get("source","app158");evaluate("globalThis.SwitchConfig={source:"+Json(source=="web"?"web":"app158").dump()+"};","config");
   for(const char* file:{"deps.js","prelude.js","hongguo.cjs","adapter.js"}){std::ifstream in(std::string("romfs:/")+file);if(!in)throw std::runtime_error("Backend resource missing");std::string script((std::istreambuf_iterator<char>(in)),{});evaluate(script,file);}
 }
 Backend::~Backend(){if(context)JS_FreeContext(context);if(runtime)JS_FreeRuntime(runtime);}
@@ -74,7 +76,7 @@ Json Backend::call(const std::string& function,const Json& args){
     return result.get();
   }
   std::lock_guard<std::mutex> guard(lock);trace("api:"+function+":begin");JS_UpdateStackTop(runtime);
-  if(function!="home"&&function!="search"&&function!="detail"&&function!="open"&&function!="read"&&function!="selftest")throw std::runtime_error("Invalid method");
+  if(function!="home"&&function!="search"&&function!="detail"&&function!="open"&&function!="read"&&function!="selftest"&&function!="clearCache")throw std::runtime_error("Invalid method");
   evaluate("globalThis.__done=false;globalThis.__answer='';Promise.resolve(SwitchAPI["+Json(function).dump()+"](..."+args.dump()+")).then(v=>{globalThis.__answer=JSON.stringify({ok:true,value:v});globalThis.__done=true;},e=>{globalThis.__answer=JSON.stringify({ok:false,message:String(e&&e.message||'接口处理失败').replace(/https?:\\/\\/[^ ]+/g,'[地址]').slice(0,180)});globalThis.__done=true;});","rpc");
   JSContext* job=nullptr;const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(120);
   while(true){JSValue global=JS_GetGlobalObject(context);JSValue done=JS_GetPropertyStr(context,global,"__done");bool complete=JS_ToBool(context,done);JS_FreeValue(context,done);if(complete){JSValue answer=JS_GetPropertyStr(context,global,"__answer");std::string raw=text(context,answer);JS_FreeValue(context,answer);JS_FreeValue(context,global);Json result=Json::parse(raw);if(!result.value("ok",false))throw std::runtime_error(result.value("message",std::string("内容源或网络暂不可用")));trace("api:"+function+":complete");return result["value"];}JS_FreeValue(context,global);

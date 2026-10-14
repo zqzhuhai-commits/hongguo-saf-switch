@@ -21,7 +21,7 @@
 const crypto = require('node:crypto');
 
 const SITE = 'https://hongguoduanju.com';
-const VIDEO_API = 'https://api5-normal-sinfonlineb.fqnovel.com/novel/player/multi_video_model/v1/';
+const VIDEO_API = 'https://api5-normal-sinfonlineb.fqnovel.com/novel/player/video_model/v1/';
 const APP_SEARCH_API = 'https://api5-normal-sinfonlinea.fqnovel.com/reading/bookapi/search/tab/v';
 const VIDEO_UA = 'com.phoenix.read/71332 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)';
 const APP_UA = 'com.phoenix.read/72232 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3)';
@@ -438,8 +438,8 @@ function signedVideoRequest(payload) {
 
 async function requestVideoModel(vid) {
     const payload = JSON.stringify({
-        biz_param: { detail_page_version: 0, device_level: 3, disable_digg_stat: false, need_all_video_definition: true, need_mp4_align: false, use_os_player: false, use_server_dns: false, video_platform: 1024 },
-        mixed_video_id_map: { '1004': [str(vid)] },
+        video_id: str(vid),
+        biz_param: { detail_page_version: 0, device_level: 3, disable_digg_stat: false, disable_video_relate_book: false, need_all_video_definition: true, need_mp4_align: false, use_os_player: false, use_server_dns: false, video_platform: 1024 },
     });
     const signed = signedVideoRequest(payload);
     const resp = await axios.post(signed.url, signed.body, { headers: signed.headers, timeout: 20000, responseType: 'text' });
@@ -449,6 +449,8 @@ async function requestVideoModel(vid) {
 }
 
 function modelForVideo(data, vid) {
+    const direct = data?.data?.video_model ?? data?.video_model;
+    if (direct) { const model = typeof direct === 'string' ? jsonBody(direct) : direct; if (!model || typeof model !== 'object') throw new Error('播放接口返回无效数据'); return model; }
     const map = data?.data || {};
     const entry = map[str(vid)] || Object.values(map).find((value) => value && typeof value === 'object');
     if (!entry) throw new Error('video_model 没有对应视频');

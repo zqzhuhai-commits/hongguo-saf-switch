@@ -10,5 +10,5 @@ ctx.getText=async()=>{requests++;if(fail)throw Error('temporary network error');
 ctx.VIDEO_UA='test';ctx.axios=async(_url,opts)=>{const [a,b]=opts.headers.Range.slice(6).split('-').map(Number);const end=Math.min(b,bytes.length-1);return {status:206,headers:{'content-range':`bytes ${a}-${end}/${bytes.length}`},data:bytes.subarray(a,end+1)};};
 ctx.fetchVideoInfo=async()=>{throw Error('video_model failed: 未知异常');};
 ctx.streamCache.set('1|desktop-480',{time:Date.now(),value:{url:'https://example.test/stale.mp4',quality:'cached',prepared:{total:16,header:bytes,samples:[]}}});
-vm.createContext(ctx);vm.runInContext(source,ctx);
+ctx.SwitchConfig={source:'web'};vm.createContext(ctx);vm.runInContext(source,ctx);
 (async()=>{await ctx.SwitchAPI.open('1',480,false);assert.equal(requests,0);const fresh=await ctx.SwitchAPI.open('1',480);assert.equal(requests,1);assert.equal(fresh.source,'web');assert.equal(ctx.streamCache.get('1|desktop-480').value.url,'https://example.test/fresh.mp4');fail=true;await assert.rejects(ctx.SwitchAPI.open('1',480),/video_model failed/);assert.equal(requests,2);await assert.rejects(ctx.SwitchAPI.read('1',0,1),/Range/);console.log('PASS: retry refreshes cached URL; failed refresh cannot serve a previous active stream');})().catch(e=>{console.error(e);process.exitCode=1;});
