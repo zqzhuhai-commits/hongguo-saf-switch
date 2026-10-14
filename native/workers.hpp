@@ -9,3 +9,7 @@ void stopWorkers();
 bool apiTask(std::function<void()> task);
 bool posterTask(std::function<void()> task);
 bool inApiWorker();
+
+bool apiBackgroundTask(std::function<void()> task);
+bool inApiBackground();
+bool apiForegroundPending();

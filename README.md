@@ -41,3 +41,11 @@ g++ -std=c++17 -Inative tests/app_config.cpp -o /tmp/config && /tmp/config
 ```
 
 检查通过仅证明本地逻辑和数据格式处理符合测试样例，不证明内容源在线可用。
+
+## 1.0.0 加载与画质更新
+
+播放器菜单增加“清晰度”，列出当前片源实际提供的兼容画质；切换保留播放位置及暂停状态。切到另一集恢复自动画质。片源没有其他档位时会显示中文提示。
+
+正常打开复用有效播放源及已验证的视频头，HTTP 连接与 DNS 缓存复用。缓冲充足时低优先级预加载下一集；前台请求到来会中止后台网络请求。可在配置设置 `playback.prefetch=no` 关闭预加载。失败重试仍强制刷新源。实际首播速度取决于网络及服务端，尚未测量本次更新的 Switch 实机耗时。应用版本仍为 1.0.0。
+
+新增回归：`node tests/quality_prefetch.cjs`、`tests/stream_request.cpp`、`tests/worker_priority.cpp`。

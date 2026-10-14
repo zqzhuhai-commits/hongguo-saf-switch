@@ -22,7 +22,7 @@ function context(){
   ctx.axios=async(u,o)=>{if(++calls===1)throw Error('disconnect');return original(u,o);};
   assert.equal((await ctx.SwitchAPI.open('1')).source,'web');assert(calls>1);
   calls=0;ctx.axios=async(u,o)=>{calls++;const r=await original(u,o);r.headers['content-range']='bytes 0-9/'+media.length;return r;};
-  await assert.rejects(ctx.SwitchAPI.read('1',100,109),/位置异常/);assert.equal(calls,2,'bounded range retries');
+  await assert.rejects(ctx.SwitchAPI.read('1',264000,264009),/位置异常/);assert.equal(calls,2,'bounded range retries');
   ctx=context();ctx.getText=async()=>{throw Error('website unavailable');};
   ctx.fetchVideoInfo=async()=>({info:{},rows:[{quality:'480',item:{codec_type:'avc',main_url:'https://example.test/broken',backup_url:'https://example.test/backup'}}]});
   const base=ctx.axios;ctx.axios=async(u,o)=>{if(u.endsWith('/broken'))throw Error('CDN down');return base(u,o);};

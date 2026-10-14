@@ -1,0 +1,24 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const source=fs.readFileSync('romfs/adapter.js','utf8');
+const media=Buffer.alloc(300000);media.writeUInt32BE(24,0);media.write('ftyp',4);media.writeUInt32BE(32,24);media.write('moov',28);media.writeUInt32BE(media.length-56,56);media.write('mdat',60);
+let now=10000,models=0,reads=0,lastUrl='';
+const ctx={Buffer,Math,console,VIDEO_UA:"test",nativeCrypto:require('crypto'),Date:{now:()=>now},SwitchConfig:{source:'app158'}};
+for(const n of source.match(/^const api=\{([^}]+)\}/)[1].split(','))ctx[n]=()=>{throw Error('unexpected '+n);};
+for(const n of ['streamCache','videoInfoCache','pageCache','appSearchCache'])ctx[n]=new Map();
+ctx.fetchVideoInfo=async id=>{let c=ctx.videoInfoCache.get(id);if(c&&now-c.time<300000)return c.value;models++;const value={info:{},rows:[{key:'high',quality:'720',item:{main_url:'https://example.test/720.mp4',codec_type:'avc'}},{key:'low',quality:'480',item:{main_url:'https://example.test/480.mp4',codec_type:'avc'}}]};ctx.videoInfoCache.set(id,{time:now,value});return value;};
+ctx.qualityNumber=Number;ctx.qualityLabel=x=>String(x)+'P';ctx.decryptPartial=d=>d;
+ctx.axios=async(url,o)=>{reads++;lastUrl=url;const [a,b]=o.headers.Range.slice(6).split('-').map(Number),end=Math.min(b,media.length-1);return {status:206,headers:{'content-range':`bytes ${a}-${end}/${media.length}`},data:media.subarray(a,end+1)};};
+vm.createContext(ctx);vm.runInContext(source,ctx);
+(async()=>{
+ assert((await ctx.SwitchAPI.prefetch('1',480)).ready);assert.equal(models,1);assert.equal(reads,1);await assert.rejects(ctx.SwitchAPI.read('1',0,10),/Range/,'prefetch must not activate a reader');
+ const r=await ctx.SwitchAPI.open('1',480,false);assert.equal(r.quality,'480P');assert.equal(models,1);assert.equal(reads,1,'warm open must not re-fetch header');
+ assert.equal(await ctx.SwitchAPI.read('1',0,99),media.subarray(0,100).toString('hex'));assert.equal(reads,1,'use validated prefix instead of duplicate download');
+ assert.equal(await ctx.SwitchAPI.read('1',250000,270000),media.subarray(250000,270001).toString('hex'));assert.equal(reads,2,'one request for the suffix beyond cached prefix');
+ const choices=await ctx.SwitchAPI.qualities('1');assert.deepEqual(Array.from(choices,c=>c.key),['high','low']);assert.equal(models,1);
+ await ctx.SwitchAPI.open('1',480,false,'high');assert.equal(lastUrl,'https://example.test/720.mp4');assert(ctx.streamCache.has('1|desktop-480|tier:high'));
+ await assert.rejects(ctx.SwitchAPI.open('1',480,false,'missing'),/没有兼容/);await assert.rejects(ctx.SwitchAPI.open('1',480,false,'..'),/参数无效/);
+ await ctx.SwitchAPI.open('1',480,true);assert.equal(models,2,'explicit retry refreshes metadata');
+ now+=300001;await ctx.SwitchAPI.open('1',480,false);assert.equal(models,3,'expired stream and metadata refreshed');
+ ctx.SwitchAPI.clearCache();assert.equal(ctx.streamCache.size,0);assert.equal(ctx.videoInfoCache.size,0);
+ console.log('PASS: exact quality tier, prefetched opening, prefix/suffix ranges, expiry, forced refresh and cache clearing');
+})().catch(e=>{console.error(e);process.exitCode=1;});
