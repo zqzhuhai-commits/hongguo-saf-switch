@@ -1,0 +1,27 @@
+name: Publish 0.1.9 feature test NSP
+on:
+  push:
+    branches: [full-158-source]
+    paths: ['dist/full-0.1.9/**', '.github/workflows/publish-full-test.yml']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: python3 dist/full-0.1.9/assemble_nsp.py
+      - name: Publish untested feature build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create v0.1.9-test.1 \
+            dist/full-0.1.9/Hongguo-Switch-0.1.9-test.1.nsp \
+            dist/full-0.1.9/SHA256SUMS \
+            dist/full-0.1.9/verification.json \
+            --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title '红果短剧 Switch 0.1.9 功能测试版' \
+            --notes-file dist/full-0.1.9/RELEASE-NOTES.md

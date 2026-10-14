@@ -1,0 +1,30 @@
+{
+  "name": "红果短剧",
+  "version": "0.1.9-test.1",
+  "nacpVersion": "0.1.9",
+  "titleId": "0100F00D53414600",
+  "sourceCommit": "1fe2aa746d6d12fdee9b64827a86e06e3d1c5425",
+  "workflowRun": 38523296263,
+  "sha256": "cdfcd37e16a2ffe4320b5ead6d4c68fa16d34a3d73fa5bad5f047a346f5e7093",
+  "bytes": 21709016,
+  "parts": [
+    "Hongguo-Switch-0.1.9-test.1.nsp.part01",
+    "Hongguo-Switch-0.1.9-test.1.nsp.part02",
+    "Hongguo-Switch-0.1.9-test.1.nsp.part03"
+  ],
+  "nativeBuildPassed": true,
+  "packageStructurePassed": true,
+  "ncaContentHashesPassed": true,
+  "hardwareTested": false,
+  "liveSourceTested": false,
+  "sourceAdaptation": "build158 single-video request shape; original client architecture; not a complete reconstruction of build158",
+  "features": [
+    "首页顶部清除播放内存缓存",
+    "横竖屏旋转",
+    "点击及拖动进度跳转",
+    "长按临时2倍速",
+    "中文界面和框架提示",
+    "内置配置",
+    "新名称和图标"
+  ]
+}
