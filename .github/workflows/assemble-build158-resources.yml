@@ -1,0 +1,23 @@
+name: Assemble incomplete build158 resource patch
+on:
+  push:
+    branches: [build158-resource-patch]
+permissions:
+  contents: read
+jobs:
+  assemble:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: python3 patches/build158/assemble_nsp.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: build158-resources-only-untested
+          path: |
+            dist/build158/*.nsp
+            dist/build158/SHA256SUMS
+            patches/build158/README.md
+            patches/build158/verification.json
+          retention-days: 30

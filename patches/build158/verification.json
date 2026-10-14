@@ -1,0 +1,45 @@
+{
+  "inputBuild": "build158",
+  "patchType": "resources-only",
+  "codeSegmentUnchanged": true,
+  "name": "红果短剧",
+  "configFallback": "romfs:/hongguo.cfg",
+  "externalConfig": "sdmc:/switch/hongguo.cfg",
+  "hardwareTested": false,
+  "newPlaybackFeaturesImplemented": false,
+  "note": "Bundled fallback is read-only. Use external config to persist settings.",
+  "originalNspSha256": "fb9cf1920ebe190fc0d158222770386cdf6e54d5a3ecd6d8cc5571fbc9232348",
+  "patchedNspSha256": "e00d13ffcdcbb6b6ba887b0acbc50f9f1dc12f0305e4d3c138d8d073a33d3266",
+  "titleId": "0101000000000000",
+  "outerContentHashesVerified": true,
+  "nsoSectionHashesVerified": true,
+  "repackedResourcesRoundtripVerified": true,
+  "nativeEntryPoints": {
+    "sdmc:/switch/hongguo.cfg": [
+      "0xebeb4",
+      "0xed2a4"
+    ],
+    "sdmc:/hongguo.cfg": [
+      "0xebfb0"
+    ],
+    "PLAYER seekAbsolute: seek %s absolute -> request %d": [
+      "0x124750"
+    ],
+    "PLAYER: touch -- the play button was tapped -> play/pause": [
+      "0x129380"
+    ],
+    "PLAYER: the touch panel reports a press at": [
+      "0x129954"
+    ],
+    "PLAYER: speed = %.2fx -> set rc=%d, read back %.2fx (rc=%d)": [
+      "0x122c9c"
+    ]
+  },
+  "pendingFeatures": [
+    "首页顶部一键清除视频缓存",
+    "点击进度条跳转",
+    "横竖屏切换",
+    "长按画面临时2倍速",
+    "全部操作按钮和说明中文化"
+  ]
+}
