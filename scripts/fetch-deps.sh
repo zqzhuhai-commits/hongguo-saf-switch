@@ -10,3 +10,5 @@ if [ ! -d dependencies/quickjs/.git ]; then
 fi
 git -C dependencies/quickjs checkout --detach a37f62afbb6ad245cd84beb297fad00bef2c5410
 python3 scripts/patch-quickjs.py
+
+python3 scripts/force-chinese-ui.py
