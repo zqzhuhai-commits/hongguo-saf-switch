@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "backend.hpp"
 #include "app_config.hpp"
+#include "episode_groups.hpp"
 #include "poster.hpp"
 #include "workers.hpp"
 #include "playback_policy.hpp"
@@ -179,7 +180,7 @@ public:
 };
 
 static void showDetail(const Json& series);
-static brls::View* posterTile(const Json& row);
+static brls::View* posterTile(const Json& row,float width=180);
 static void addGrid(brls::Box* list,const std::vector<brls::View*>& tiles,size_t columns,float gap,float rowGap){brls::Box* row=nullptr;for(size_t i=0;i<tiles.size();i++){if(i%columns==0){row=new brls::Box(brls::Axis::ROW);row->setMarginBottom(rowGap);list->addView(row);}auto* tile=tiles[i];if(i%columns!=columns-1)tile->setMarginRight(gap);row->addView(tile);if(i>=columns)tile->setCustomNavigationRoute(brls::FocusDirection::UP,tiles[i-columns]);const size_t nextRow=(i/columns+1)*columns;if(nextRow<tiles.size())tile->setCustomNavigationRoute(brls::FocusDirection::DOWN,tiles[std::min(i+columns,tiles.size()-1)]);}}
 class Page:public brls::Box {
   std::shared_ptr<std::atomic<bool>> alive=std::make_shared<std::atomic<bool>>(true);brls::Box* list;
@@ -195,17 +196,47 @@ static void showDetail(const Json& series){auto* list=new brls::Box(brls::Axis::
   apiTask([list,flag,series]{Json detail;bool ok=false;try{detail=backend->call("detail",Json::array({series.at("id")}));ok=true;}catch(...){}brls::sync([list,flag,ok,detail]{if(!*flag)return;list->clearViews();if(!ok){list->addView(cell("分集暂不可用","按 B 返回",[]{}));return;}
     list->addView(posterCell(detail,[]{}));
     list->addView(cell("收藏 / 取消收藏","保存在当前主机",[detail]{auto& rows=library["favorites"];auto it=std::find_if(rows.begin(),rows.end(),[&](const Json& row){return row.value("id",std::string())==detail.value("id",std::string());});if(it==rows.end()){Json row=detail;row.erase("episodes");rows.push_back(row);message("已收藏");}else{rows.erase(it);message("已取消收藏");}save();}));
-    auto* label=new brls::Label();label->setText("选择分集 · 共 "+std::to_string(detail["episodes"].size())+" 集");label->setFontSize(24);label->setMarginTop(20);label->setMarginBottom(16);list->addView(label);std::vector<brls::View*> buttons;for(size_t i=0;i<detail["episodes"].size();i++){auto* button=new ClickableBox(brls::Axis::COLUMN);button->setWidth(106);button->setHeight(56);button->setPadding(12);button->setBackgroundColor(nvgRGB(35,38,49));auto* number=new brls::Label();number->setText(std::to_string(i+1));number->setFontSize(22);number->setHorizontalAlign(brls::HorizontalAlign::CENTER);button->addView(number);button->registerClickAction([detail,i](brls::View*){brls::Application::pushActivity(new brls::Activity(new Player(detail,(int)i)));return true;});buttons.push_back(button);}addGrid(list,buttons,10,10,12);if(!buttons.empty())brls::Application::giveFocus(buttons.front());
+    auto sharedDetail=std::make_shared<const Json>(detail);
+    const size_t total=detail["episodes"].size(),groups=episodeGroupCount(total);
+    auto* label=new brls::Label();label->setFontSize(24);label->setMarginTop(20);label->setMarginBottom(16);list->addView(label);
+    auto ranges=std::make_shared<std::vector<brls::View*>>();
+    auto* grid=new brls::Box(brls::Axis::COLUMN);
+    auto render=[grid,label,sharedDetail,total,ranges](size_t group){
+      const auto bounds=episodeGroupBounds(total,group);
+      label->setText("选择分集 · 共 "+std::to_string(total)+" 集"+(total>100?" · 当前 "+std::to_string(bounds.first+1)+"-"+std::to_string(bounds.second)+" 集":""));
+      grid->clearViews();std::vector<brls::View*> buttons;
+      for(size_t i=bounds.first;i<bounds.second;i++){
+        auto* button=new ClickableBox(brls::Axis::COLUMN);button->setWidth(106);button->setHeight(56);button->setPadding(12);button->setBackgroundColor(nvgRGB(35,38,49));
+        auto* number=new brls::Label();number->setText(std::to_string(i+1));number->setFontSize(22);number->setHorizontalAlign(brls::HorizontalAlign::CENTER);button->addView(number);
+        button->registerClickAction([sharedDetail,i](brls::View*){brls::Application::pushActivity(new brls::Activity(new Player(*sharedDetail,(int)i)));return true;});buttons.push_back(button);
+      }
+      addGrid(grid,buttons,10,10,12);
+      for(size_t i=0;i<ranges->size();i++){(*ranges)[i]->setBackgroundColor(i==group?nvgRGB(180,50,70):nvgRGB(35,38,49));if(!buttons.empty())(*ranges)[i]->setCustomNavigationRoute(brls::FocusDirection::DOWN,buttons.front());}
+      if(group<ranges->size())for(size_t i=0;i<std::min<size_t>(10,buttons.size());i++)buttons[i]->setCustomNavigationRoute(brls::FocusDirection::UP,(*ranges)[group]);
+      if(!buttons.empty())brls::Application::giveFocus(buttons.front());
+    };
+    if(groups>1){
+      auto* scroll=new brls::HScrollingFrame();scroll->setHeight(72);auto* row=new brls::Box(brls::Axis::ROW);
+      for(size_t group=0;group<groups;group++){
+        const auto bounds=episodeGroupBounds(total,group);auto* button=new ClickableBox(brls::Axis::COLUMN);button->setWidth(150);button->setHeight(56);button->setPadding(12);button->setMarginRight(12);button->setShrink(0);
+        auto* text=new brls::Label();text->setText(std::to_string(bounds.first+1)+"-"+std::to_string(bounds.second)+" 集");text->setFontSize(18);text->setHorizontalAlign(brls::HorizontalAlign::CENTER);button->addView(text);
+        button->registerClickAction([render,group](brls::View*){render(group);return true;});row->addView(button);ranges->push_back(button);
+        if(group){button->setCustomNavigationRoute(brls::FocusDirection::LEFT,(*ranges)[group-1]);(*ranges)[group-1]->setCustomNavigationRoute(brls::FocusDirection::RIGHT,button);}
+      }
+      scroll->setContentView(row);list->addView(scroll);
+    }
+    list->addView(grid);render(0);
+
   });});
 }
 static void openSearch(){SwkbdConfig keyboard;if(R_FAILED(swkbdCreate(&keyboard,0)))return;swkbdConfigMakePresetDefault(&keyboard);swkbdConfigSetStringLenMax(&keyboard,80);swkbdConfigSetGuideText(&keyboard,"输入剧名");char text[512]={};Result result=swkbdShow(&keyboard,text,sizeof(text));swkbdClose(&keyboard);if(R_SUCCEEDED(result)&&text[0])brls::Application::pushActivity(new brls::Activity(new Page("search",Json::array({std::string(text),1,"short"}))));}
 static void openLibrary(bool favorites){auto* box=new brls::Box(brls::Axis::COLUMN);if(favorites){for(const auto& row:library["favorites"])box->addView(posterCell(row,[row]{showDetail(row);}));}else{for(const auto& row:library["history"]){const auto series=row.value("series",Json::object());box->addView(posterCell(series,[series]{showDetail(series);}));}}brls::Application::pushActivity(new brls::Activity(frame(box,favorites?"我的收藏":"最近观看")));}
-static brls::View* posterTile(const Json& row){auto* tile=new ClickableBox(brls::Axis::COLUMN);tile->setWidth(180);tile->setHeight(404);tile->setPadding(8);tile->setShrink(0);tile->addView(new PosterImage(row.value("cover",std::string()),164,246));auto* title=new brls::Label();title->setText(row.value("title",std::string("红果短剧")));title->setWidth(164);title->setFontSize(18);title->setLineHeight(1.2f);title->setSingleLine(false);title->setTextColor(nvgRGB(245,245,247));title->setHorizontalAlign(brls::HorizontalAlign::LEFT);title->setHeight(96);tile->addView(title);auto* note=new brls::Label();note->setText(row.value("badge",std::string()));note->setWidth(164);note->setHeight(30);note->setSingleLine(true);note->setFontSize(14);note->setTextColor(nvgRGB(156,164,178));note->setHorizontalAlign(brls::HorizontalAlign::LEFT);tile->addView(note);tile->registerClickAction([row](brls::View*){showDetail(row);return true;});tile->registerAction("完整剧名",brls::BUTTON_X,[row](brls::View*){message(row.value("title",std::string()));return true;});return tile;}
+static brls::View* posterTile(const Json& row,float width){auto* tile=new ClickableBox(brls::Axis::COLUMN);tile->setWidth(width);tile->setHeight((width-16)*1.5f+158);tile->setPadding(8);tile->setShrink(0);tile->addView(new PosterImage(row.value("cover",std::string()),width-16,(width-16)*1.5f));auto* title=new brls::Label();title->setText(row.value("title",std::string("红果短剧")));title->setWidth(width-16);title->setFontSize(18);title->setLineHeight(1.2f);title->setSingleLine(false);title->setTextColor(nvgRGB(245,245,247));title->setHorizontalAlign(brls::HorizontalAlign::LEFT);title->setHeight(96);tile->addView(title);auto* note=new brls::Label();note->setText(row.value("badge",std::string()));note->setWidth(width-16);note->setHeight(30);note->setSingleLine(true);note->setFontSize(14);note->setTextColor(nvgRGB(156,164,178));note->setHorizontalAlign(brls::HorizontalAlign::LEFT);tile->addView(note);tile->registerClickAction([row](brls::View*){showDetail(row);return true;});tile->registerAction("完整剧名",brls::BUTTON_X,[row](brls::View*){message(row.value("title",std::string()));return true;});return tile;}
 
 static brls::Label* sectionTitle(const std::string& text){auto* label=new brls::Label();label->setText(text);label->setFontSize(25);label->setTextColor(nvgRGB(255,255,255));label->setHorizontalAlign(brls::HorizontalAlign::LEFT);label->setMarginTop(20);label->setMarginBottom(10);return label;}
 class HomeDashboard:public brls::Box{
   std::shared_ptr<std::atomic<bool>> alive=std::make_shared<std::atomic<bool>>(true);brls::Box* content;
-  void addCatalog(brls::Box* shelf,const std::string& title,const Json& result,bool ok){trace("home:render_begin");shelf->clearViews();shelf->addView(sectionTitle(title));if(!ok){shelf->addView(cell("暂时无法加载","按 B 返回后重试",[]{}));trace("home:render_error");return;}auto* scroller=new brls::HScrollingFrame();scroller->setHeight(424);auto* row=new brls::Box(brls::Axis::ROW);for(const auto& item:result.value("items",Json::array())){if(row->getChildren().size()>=12)break;if(item.is_object()&&item.contains("id")&&item.contains("title")){auto* tile=posterTile(item);tile->setMarginRight(16);row->addView(tile);}}if(row->getChildren().empty())row->addView(cell("暂时没有内容","请稍后重试",[]{}));scroller->setContentView(row);shelf->addView(scroller);trace("home:render_complete");}
+  void addCatalog(brls::Box* shelf,const std::string& title,const Json& result,bool ok){trace("home:render_begin");shelf->clearViews();auto* header=new brls::Box(brls::Axis::ROW);auto* heading=sectionTitle(title);heading->setGrow(1);header->addView(heading);if(ok&&result.value("items",Json::array()).size()>5){auto* hint=new brls::Label();hint->setText("向右滑动 →");hint->setFontSize(16);hint->setWidth(160);hint->setMarginTop(20);hint->setHorizontalAlign(brls::HorizontalAlign::RIGHT);hint->setTextColor(nvgRGB(183,190,204));header->addView(hint);}shelf->addView(header);if(!ok){shelf->addView(cell("暂时无法加载","按 B 返回后重试",[]{}));trace("home:render_error");return;}auto* scroller=new brls::HScrollingFrame();scroller->setHeight(454);auto* row=new brls::Box(brls::Axis::ROW);for(const auto& item:result.value("items",Json::array())){if(row->getChildren().size()>=12)break;if(item.is_object()&&item.contains("id")&&item.contains("title")){auto* tile=posterTile(item,200);tile->setMarginRight(16);row->addView(tile);}}if(row->getChildren().empty())row->addView(cell("暂时没有内容","请稍后重试",[]{}));scroller->setContentView(row);shelf->addView(scroller);trace("home:render_complete");}
 public:
   HomeDashboard():brls::Box(brls::Axis::COLUMN){setGrow(1);setPadding(24,40,30,40);auto* cleanup=new brls::Box(brls::Axis::COLUMN);cleanup->setPaddingBottom(12);cleanup->addView(cell("一键清除视频缓存","清理播放源缓存，保留收藏和观看记录",[this]{auto flag=alive;apiTask([flag]{bool ok=false;try{backend->call("clearCache",Json::array());ok=true;}catch(...){}brls::sync([flag,ok]{if(!*flag)return;message(ok?"视频缓存已清除":"缓存清理失败，请重试");});});}));addView(cleanup);
     auto* hero=new brls::Box(brls::Axis::COLUMN);hero->setPadding(20);hero->setBackgroundColor(nvgRGB(35,38,49));auto* eyebrow=new brls::Label();eyebrow->setText("发现下一部好剧");eyebrow->setFontSize(14);eyebrow->setTextColor(nvgRGB(255,112,100));eyebrow->setHorizontalAlign(brls::HorizontalAlign::LEFT);hero->addView(eyebrow);auto* heading=new brls::Label();heading->setText("好剧上新，随时开看");heading->setFontSize(31);heading->setTextColor(nvgRGB(255,255,255));heading->setHorizontalAlign(brls::HorizontalAlign::LEFT);hero->addView(heading);auto* subtitle=new brls::Label();subtitle->setText("短剧与漫剧精选 · 为你发现下一段故事");subtitle->setTextColor(nvgRGB(183,190,204));subtitle->setHorizontalAlign(brls::HorizontalAlign::LEFT);hero->addView(subtitle);addView(hero);

@@ -20,6 +20,7 @@ jobs:
           g++ -std=c++17 -Inative tests/playback_policy.cpp -o /tmp/policy && /tmp/policy
           g++ -std=c++17 -Inative tests/playback_touch.cpp -o /tmp/touch && /tmp/touch
           g++ -std=c++17 -Inative tests/app_config.cpp -o /tmp/config && /tmp/config
+          g++ -std=c++17 -Inative tests/episode_groups.cpp -o /tmp/groups && /tmp/groups
       - name: Fetch pinned development dependencies
         run: sh scripts/fetch-deps.sh
       - name: Configure and build native app
