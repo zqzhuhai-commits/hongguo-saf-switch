@@ -1,0 +1,20 @@
+{
+  "name": "红果短剧",
+  "applicationVersion": "1.0.0",
+  "titleId": "0100F00D53414600",
+  "sha256": "d70d8b7697c32516ea507e8fad86077c1e6294a6ce5986f8410c7f637aac9dc4",
+  "bytes": 21745880,
+  "parts": [
+    "Hongguo-Switch-1.0.0-cards.nsp.part01",
+    "Hongguo-Switch-1.0.0-cards.nsp.part02",
+    "Hongguo-Switch-1.0.0-cards.nsp.part03"
+  ],
+  "sourceCommit": "3d503e6989123b2fa66cd6e30994c1f8d9407e9a",
+  "buildRun": 38532809124,
+  "buildSuccess": true,
+  "nsoSegmentsVerified": 3,
+  "ncaNamesVerified": true,
+  "bundledResourcesMatch": true,
+  "hardwareTested": false,
+  "hardwareVisualCheck": false
+}

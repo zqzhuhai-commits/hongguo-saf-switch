@@ -1,0 +1,27 @@
+name: Publish 红果短剧 1.0.0 cards update
+on:
+  push:
+    branches: [main]
+    paths: ['dist/cards-1.0.0/**', '.github/workflows/publish-cards-1.yml']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: python3 dist/cards-1.0.0/assemble_nsp.py
+      - name: Publish cards package with unchanged application version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create v1.0.0-cards \
+            dist/cards-1.0.0/Hongguo-Switch-1.0.0-cards.nsp \
+            dist/cards-1.0.0/SHA256SUMS \
+            dist/cards-1.0.0/verification.json \
+            --target "$GITHUB_SHA" --latest \
+            --title '红果短剧 Switch 1.0.0 首页卡片优化版' \
+            --notes-file dist/cards-1.0.0/RELEASE-NOTES.md
