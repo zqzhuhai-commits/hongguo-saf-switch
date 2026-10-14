@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resource-only patch for the user's build158, not a feature implementation.
+"""Resource and localization patch for the user's build158, not a feature implementation.
 Input main must be decompressed by hactool. Never accepts or writes keys.
 """
 import argparse, ctypes, ctypes.util, hashlib, json, shutil, struct
@@ -11,6 +11,7 @@ p.add_argument('uncompressed_main',type=Path)
 p.add_argument('icon',type=Path)
 p.add_argument('config',type=Path)
 p.add_argument('output',type=Path)
+p.add_argument('--translations',type=Path)
 a=p.parse_args()
 assert hashlib.sha256((a.extracted/'exefs/main').read_bytes()).hexdigest() == 'ca2d817d8275c6712feb23b34093e89c37696e98f5464cebef3f08294b0c7d01'
 shutil.copytree(a.extracted/'exefs',a.output/'exefs',dirs_exist_ok=True)
@@ -25,6 +26,26 @@ at=b.index(old)
 assert b[at+len(old):at+len(new)]==bytes(len(new)-len(old))
 b[at:at+len(new)]=new
 assert b.count(b'sdmc:/switch/hongguo.cfg\0')==1
+translations=[]
+if a.translations:
+    import re
+    # Only the reviewed application settings area; never touch protocol strings.
+    for english,chinese in json.loads(a.translations.read_text()).items():
+        old=english.encode()+b'\0';new=chinese.encode()+b'\0'
+        matches=[];search=0x1290000
+        while True:
+            at=b.find(old,search,0x1292488)
+            if at<0:break
+            if b[at-1]==0:matches.append(at)
+            search=at+len(old)
+        assert len(matches)==1, (english,matches)
+        at=matches[0];end=at+len(old)
+        while b[end]==0:end+=1
+        assert len(new)<=end-at, (english,len(new),end-at)
+        fmt=r'%(?:[-+ #0]*)(?:[0-9]*)(?:\.[0-9]+)?(?:ll|l|z)?[diouxXfFeEgGcs]'
+        assert re.findall(fmt,english)==re.findall(fmt,chinese),english
+        b[at:end]=new.ljust(end-at,b'\0')
+        translations.append({'english':english,'chinese':chinese,'fileOffset':hex(at),'slotBytes':end-at})
 sections=[]
 for i in range(3):
  off,mem,size,extra=struct.unpack_from('<IIII',b,0x10+16*i)
@@ -53,5 +74,5 @@ config=a.config.read_bytes()
 # The native build supports the language option; resource fallback selects Chinese.
 config+=b'\nlanguage=zh\n'
 (a.output/'romfs/hongguo.cfg').write_bytes(config)
-(a.output/'resource-patch.json').write_text(json.dumps({'inputBuild':'build158','patchType':'resources-only','codeSegmentUnchanged':True,'name':'红果短剧','configFallback':'romfs:/hongguo.cfg','externalConfig':'sdmc:/switch/hongguo.cfg','hardwareTested':False,'newPlaybackFeaturesImplemented':False,'note':'Bundled fallback is read-only. Use external config to persist settings.'},ensure_ascii=False,indent=2)+'\n')
+(a.output/'resource-patch.json').write_text(json.dumps({'inputBuild':'build158','patchType':'resources-only','codeSegmentUnchanged':True,'name':'红果短剧','configFallback':'romfs:/hongguo.cfg','externalConfig':'sdmc:/switch/hongguo.cfg','hardwareTested':False,'newPlaybackFeaturesImplemented':False,'reviewedChineseOverrides':translations,'note':'Bundled fallback is read-only. Use external config to persist settings.'},ensure_ascii=False,indent=2)+'\n')
 print('Resource patch prepared; executable code unchanged; hardware untested.')

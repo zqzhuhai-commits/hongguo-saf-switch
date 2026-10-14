@@ -1,8 +1,9 @@
-# build158 资源补丁（未实机测试，功能未完成）
+# build158 资源与中文补丁（未实机测试，功能未完成）
 
 此分支针对用户上传的「红果switch--158版.zip」中的 NSP，不是 main 分支 0.1.8 客户端的升级，也不是完整功能版本。
 
 已修改：
+- 新增 66 处硬编码设置、网络测试和播放自检文案中文覆盖；固定槽内替换，格式参数顺序与代码段保持不变。
 - Switch 主页安装名称：红果短剧（全部 16 个 NACP 语言槽）。
 - 安装图标：用户上传的图片，转成 256×256 JPEG。
 - RomFS 内置 hongguo.cfg，保留 renderer=deko3d、hwdec=auto，增加 language=zh。
@@ -40,3 +41,7 @@ python patches/build158/patch_resources.py extracted main-uncompressed user-icon
 再使用本地 hacBrewPack 与本地打包密钥对 patched/exefs、patched/romfs、patched/control 打包。此分支不包含任何密钥。
 
 本目录没有恢复 build158 源码；其来源和许可证不能通过二进制检查确定，不宣称其为 main 分支 GPL 源码的编译结果。
+
+## 本轮中文修复
+
+复现上述补丁时额外指定 `--translations patches/build158/zh_overrides.json`。审核过的 66 个字符串、原偏移和槽大小记录在 verification.json 中。普通界面沿用 build158 自带中文文案，内置配置选择 language=zh；外部配置优先，外部配置如指定英文或自动语言，普通界面仍可能显示英文。接口地址、请求体、签名及媒体处理函数均未改动，原生 .text 段逐字节保持一致。未声称已实现点击进度跳转、长按倍速、旋转或清缓存。

@@ -1,6 +1,6 @@
 {
   "inputBuild": "build158",
-  "patchType": "resources-only",
+  "patchType": "resources-and-localization",
   "codeSegmentUnchanged": true,
   "name": "红果短剧",
   "configFallback": "romfs:/hongguo.cfg",
@@ -9,7 +9,7 @@
   "newPlaybackFeaturesImplemented": false,
   "note": "Bundled fallback is read-only. Use external config to persist settings.",
   "originalNspSha256": "fb9cf1920ebe190fc0d158222770386cdf6e54d5a3ecd6d8cc5571fbc9232348",
-  "patchedNspSha256": "e00d13ffcdcbb6b6ba887b0acbc50f9f1dc12f0305e4d3c138d8d073a33d3266",
+  "patchedNspSha256": "a6d1a6b14acee07081c36783c224994429a9acdfbb294f29eb96197f6c5028c0",
   "titleId": "0101000000000000",
   "outerContentHashesVerified": true,
   "nsoSectionHashesVerified": true,
@@ -41,5 +41,404 @@
     "横竖屏切换",
     "长按画面临时2倍速",
     "全部操作按钮和说明中文化"
-  ]
+  ],
+  "reviewedChineseOverrides": [
+    {
+      "english": "Play check",
+      "chinese": "播放自检",
+      "fileOffset": "0x1291b78",
+      "slotBytes": 16
+    },
+    {
+      "english": "within a minute",
+      "chinese": "不足一分钟",
+      "fileOffset": "0x1291be0",
+      "slotBytes": 16
+    },
+    {
+      "english": "console clock is BEHIND",
+      "chinese": "主机时间偏慢",
+      "fileOffset": "0x1291bf0",
+      "slotBytes": 24
+    },
+    {
+      "english": "console clock is AHEAD",
+      "chinese": "主机时间偏快",
+      "fileOffset": "0x1291c08",
+      "slotBytes": 24
+    },
+    {
+      "english": "All stages passed. Press A on any row to re-run.",
+      "chinese": "检查通过，选中任一行按 A 重新检查。",
+      "fileOffset": "0x1291c20",
+      "slotBytes": 56
+    },
+    {
+      "english": "A stage failed -- the row above names which one.",
+      "chinese": "检查失败，上方显示失败环节。",
+      "fileOffset": "0x1291c58",
+      "slotBytes": 56
+    },
+    {
+      "english": "FAILED: ",
+      "chinese": "失败：",
+      "fileOffset": "0x1291c90",
+      "slotBytes": 16
+    },
+    {
+      "english": "not reached",
+      "chinese": "未执行",
+      "fileOffset": "0x1291ca0",
+      "slotBytes": 16
+    },
+    {
+      "english": "%u bytes",
+      "chinese": "%u 字节",
+      "fileOffset": "0x1291cb0",
+      "slotBytes": 16
+    },
+    {
+      "english": "%ld bytes",
+      "chinese": "%ld 字节",
+      "fileOffset": "0x1291cc0",
+      "slotBytes": 16
+    },
+    {
+      "english": "no Date header sent",
+      "chinese": "未返回时间信息",
+      "fileOffset": "0x1291cf8",
+      "slotBytes": 24
+    },
+    {
+      "english": "unknown (no server clock)",
+      "chinese": "未知（无服务器时间）",
+      "fileOffset": "0x1291d20",
+      "slotBytes": 32
+    },
+    {
+      "english": "FAIL ",
+      "chinese": "失败",
+      "fileOffset": "0x1291d98",
+      "slotBytes": 8
+    },
+    {
+      "english": "OK   ",
+      "chinese": "通过",
+      "fileOffset": "0x1291da0",
+      "slotBytes": 8
+    },
+    {
+      "english": "asked from the settings screen",
+      "chinese": "从设置页发起检查",
+      "fileOffset": "0x1291da8",
+      "slotBytes": 32
+    },
+    {
+      "english": "Could not write ",
+      "chinese": "无法写入 ",
+      "fileOffset": "0x1291e00",
+      "slotBytes": 24
+    },
+    {
+      "english": " to hongguo.cfg -- see the log",
+      "chinese": " 到配置文件，查日志",
+      "fileOffset": "0x1291e18",
+      "slotBytes": 32
+    },
+    {
+      "english": "hongguo.cfg holds '%s=...' with a value not in this list",
+      "chinese": "配置项 '%s=...' 的值不在可选范围内",
+      "fileOffset": "0x1291e98",
+      "slotBytes": 64
+    },
+    {
+      "english": "Ethernet",
+      "chinese": "有线网络",
+      "fileOffset": "0x1291ee0",
+      "slotBytes": 16
+    },
+    {
+      "english": "Connection",
+      "chinese": "网络连接",
+      "fileOffset": "0x1291ef0",
+      "slotBytes": 16
+    },
+    {
+      "english": "API test (home page, end to end)",
+      "chinese": "首页接口测试",
+      "fileOffset": "0x1291f00",
+      "slotBytes": 40
+    },
+    {
+      "english": "Clocks",
+      "chinese": "时钟",
+      "fileOffset": "0x1291f28",
+      "slotBytes": 8
+    },
+    {
+      "english": "Press A on any row to run the test again.",
+      "chinese": "选中任一行按 A 重新测试。",
+      "fileOffset": "0x1291f30",
+      "slotBytes": 48
+    },
+    {
+      "english": "nifm unavailable (rc=0x%08X)",
+      "chinese": "网络不可用(rc=0x%08X)",
+      "fileOffset": "0x1291f60",
+      "slotBytes": 32
+    },
+    {
+      "english": "connected (%s, signal %u)",
+      "chinese": "已连接(%s,信号 %u)",
+      "fileOffset": "0x1291fa8",
+      "slotBytes": 32
+    },
+    {
+      "english": "NOT connected (status=%d rc=0x%08X)",
+      "chinese": "未连接(状态=%d rc=0x%08X)",
+      "fileOffset": "0x1291fc8",
+      "slotBytes": 40
+    },
+    {
+      "english": "unavailable (rc=0x%08X)",
+      "chinese": "不可用(rc=0x%08X)",
+      "fileOffset": "0x1292018",
+      "slotBytes": 24
+    },
+    {
+      "english": "Result",
+      "chinese": "结果",
+      "fileOffset": "0x1292068",
+      "slotBytes": 8
+    },
+    {
+      "english": "Play chain",
+      "chinese": "播放链路",
+      "fileOffset": "0x1292070",
+      "slotBytes": 16
+    },
+    {
+      "english": "Stages, in the order the player meets them",
+      "chinese": "按照实际播放顺序逐项检查",
+      "fileOffset": "0x1292080",
+      "slotBytes": 48
+    },
+    {
+      "english": "Press A on any row to walk the chain again. The same check runs by itself when a plan or a quality list fails, and reports the server's own answer.",
+      "chinese": "选中任一行按 A 重新检查。播放方案或清晰度列表加载失败时会自动检查，并显示服务器返回的结果。",
+      "fileOffset": "0x12920b0",
+      "slotBytes": 152
+    },
+    {
+      "english": "1  Home page",
+      "chinese": "1  首页",
+      "fileOffset": "0x1292148",
+      "slotBytes": 16
+    },
+    {
+      "english": "2  Detail page (episode id)",
+      "chinese": "2  分集详情",
+      "fileOffset": "0x1292158",
+      "slotBytes": 32
+    },
+    {
+      "english": "3  Video model request (signed)",
+      "chinese": "3  播放接口请求",
+      "fileOffset": "0x1292178",
+      "slotBytes": 32
+    },
+    {
+      "english": "4  Quality ladder",
+      "chinese": "4  清晰度列表",
+      "fileOffset": "0x1292198",
+      "slotBytes": 24
+    },
+    {
+      "english": "5  Stream (Range request)",
+      "chinese": "5  视频流分段请求",
+      "fileOffset": "0x12921b0",
+      "slotBytes": 32
+    },
+    {
+      "english": "Elapsed",
+      "chinese": "耗时",
+      "fileOffset": "0x12921d0",
+      "slotBytes": 8
+    },
+    {
+      "english": "checking...",
+      "chinese": "检查中…",
+      "fileOffset": "0x12921d8",
+      "slotBytes": 16
+    },
+    {
+      "english": "IP address",
+      "chinese": "IP 地址",
+      "fileOffset": "0x12921e8",
+      "slotBytes": 16
+    },
+    {
+      "english": "DNS servers",
+      "chinese": "DNS 地址",
+      "fileOffset": "0x12921f8",
+      "slotBytes": 16
+    },
+    {
+      "english": "API test",
+      "chinese": "接口测试",
+      "fileOffset": "0x1292208",
+      "slotBytes": 16
+    },
+    {
+      "english": "not run yet",
+      "chinese": "尚未测试",
+      "fileOffset": "0x1292218",
+      "slotBytes": 16
+    },
+    {
+      "english": "HTTP status",
+      "chinese": "HTTP 状态",
+      "fileOffset": "0x1292228",
+      "slotBytes": 16
+    },
+    {
+      "english": "Body size",
+      "chinese": "返回大小",
+      "fileOffset": "0x1292238",
+      "slotBytes": 16
+    },
+    {
+      "english": "Cards parsed",
+      "chinese": "海报数量",
+      "fileOffset": "0x1292258",
+      "slotBytes": 16
+    },
+    {
+      "english": "Console clock",
+      "chinese": "主机时间",
+      "fileOffset": "0x1292268",
+      "slotBytes": 16
+    },
+    {
+      "english": "Server clock",
+      "chinese": "服务器时间",
+      "fileOffset": "0x1292278",
+      "slotBytes": 16
+    },
+    {
+      "english": "Clock skew",
+      "chinese": "时间偏差",
+      "fileOffset": "0x1292288",
+      "slotBytes": 16
+    },
+    {
+      "english": "Vibration",
+      "chinese": "振动",
+      "fileOffset": "0x12922b8",
+      "slotBytes": 16
+    },
+    {
+      "english": "Theme",
+      "chinese": "主题",
+      "fileOffset": "0x1292330",
+      "slotBytes": 8
+    },
+    {
+      "english": "Frame limit",
+      "chinese": "帧率限制",
+      "fileOffset": "0x1292348",
+      "slotBytes": 16
+    },
+    {
+      "english": "Show FPS",
+      "chinese": "显示帧率",
+      "fileOffset": "0x1292368",
+      "slotBytes": 16
+    },
+    {
+      "english": "Swap A/B and X/Y",
+      "chinese": "交换 A/B 与 X/Y",
+      "fileOffset": "0x1292378",
+      "slotBytes": 24
+    },
+    {
+      "english": "Button hints",
+      "chinese": "按钮提示",
+      "fileOffset": "0x1292390",
+      "slotBytes": 16
+    },
+    {
+      "english": "software render path",
+      "chinese": "软件渲染路径",
+      "fileOffset": "0x12923a0",
+      "slotBytes": 24
+    },
+    {
+      "english": "Picture menu (X)",
+      "chinese": "画面菜单(X)",
+      "fileOffset": "0x12923f0",
+      "slotBytes": 24
+    },
+    {
+      "english": "Quality row (X)",
+      "chinese": "清晰度项(X)",
+      "fileOffset": "0x1292418",
+      "slotBytes": 16
+    },
+    {
+      "english": "Low-quality decode",
+      "chinese": "低画质解码",
+      "fileOffset": "0x1292428",
+      "slotBytes": 24
+    },
+    {
+      "english": "Decode cache",
+      "chinese": "解码缓存",
+      "fileOffset": "0x1292440",
+      "slotBytes": 16
+    },
+    {
+      "english": "Software surface",
+      "chinese": "软件画面尺寸",
+      "fileOffset": "0x1292460",
+      "slotBytes": 24
+    },
+    {
+      "english": "not run (no worker)",
+      "chinese": "未运行(无线程)",
+      "fileOffset": "0x12919f8",
+      "slotBytes": 24
+    },
+    {
+      "english": "No worker thread was available to run the check.",
+      "chinese": "没有可用线程执行检查。",
+      "fileOffset": "0x1291a10",
+      "slotBytes": 56
+    },
+    {
+      "english": "running...",
+      "chinese": "运行中…",
+      "fileOffset": "0x1291a48",
+      "slotBytes": 16
+    },
+    {
+      "english": "Probe in flight (one HTTPS request to the home page).",
+      "chinese": "正在请求首页进行网络测试。",
+      "fileOffset": "0x1291a58",
+      "slotBytes": 56
+    },
+    {
+      "english": "not run (no worker thread)",
+      "chinese": "未运行（无可用线程）",
+      "fileOffset": "0x1291ac8",
+      "slotBytes": 32
+    },
+    {
+      "english": "No worker thread was available to run the probe.",
+      "chinese": "没有可用线程执行网络测试。",
+      "fileOffset": "0x1291ae8",
+      "slotBytes": 56
+    }
+  ],
+  "localizationHardwareTested": false
 }
