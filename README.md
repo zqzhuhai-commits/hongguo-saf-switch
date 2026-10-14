@@ -49,3 +49,7 @@ g++ -std=c++17 -Inative tests/app_config.cpp -o /tmp/config && /tmp/config
 正常打开复用有效播放源及已验证的视频头，HTTP 连接与 DNS 缓存复用。缓冲充足时低优先级预加载下一集；前台请求到来会中止后台网络请求。可在配置设置 `playback.prefetch=no` 关闭预加载。失败重试仍强制刷新源。实际首播速度取决于网络及服务端，尚未测量本次更新的 Switch 实机耗时。应用版本仍为 1.0.0。
 
 新增回归：`node tests/quality_prefetch.cjs`、`tests/stream_request.cpp`、`tests/worker_priority.cpp`。
+
+## 1.0.0 卡片排版更新
+
+首页短剧、漫剧与分类/搜索网格统一使用圆角卡片，封面以固定 2:3 比例等比填充。封面、剧名与说明共用卡片背景；标题区域固定高度并顶端对齐，短标题与换行标题的第一行、说明文字均保持同一位置。保留 X 查看完整剧名，以及首页向右滑动提示和下一张封面的露出。应用版本保持 1.0.0。
