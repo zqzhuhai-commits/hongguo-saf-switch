@@ -1,5 +1,7 @@
 # 红果短剧 Switch 1.0.0 正式版
 
+[下载 NSP](https://github.com/zqzhuhai-commits/hongguo-switch/releases/download/v1.0.0/Hongguo-Switch-1.0.0.nsp) · [正式版发布说明](https://github.com/zqzhuhai-commits/hongguo-switch/releases/tag/v1.0.0)
+
 此版本以原仓库客户端架构为基础，适配用户提供的 build158 单视频请求形式，未修改 build158 NSP 本体。用户已确认 0.1.9-test.1 可以播放且交互功能正常，并授权正式发布。本次增加 ZR 横竖屏切换快捷键、每 100 集分组选择和首页横向浏览提示；新增项目通过源码检查及原生构建，尚未由用户再次实机测试。不宣称完整复刻 build158 的原生程序。
 
 - 首页短剧与漫剧海报栏加宽卡片，初始露出下一张封面的一部分，并显示“向右滑动 →”提示。

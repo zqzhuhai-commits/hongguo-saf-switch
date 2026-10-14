@@ -1,0 +1,27 @@
+name: Publish 红果短剧 1.0.0 formal release
+on:
+  push:
+    branches: [main]
+    paths: ['dist/formal-1.0.0/**', '.github/workflows/publish-formal-1.yml']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: python3 dist/formal-1.0.0/assemble_nsp.py
+      - name: Publish user-approved formal version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create v1.0.0 \
+            dist/formal-1.0.0/Hongguo-Switch-1.0.0.nsp \
+            dist/formal-1.0.0/SHA256SUMS \
+            dist/formal-1.0.0/verification.json \
+            --target "$GITHUB_SHA" --latest \
+            --title '红果短剧 Switch 1.0.0 正式版' \
+            --notes-file dist/formal-1.0.0/RELEASE-NOTES.md

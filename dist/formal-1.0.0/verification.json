@@ -1,0 +1,28 @@
+{
+  "name": "红果短剧",
+  "version": "1.0.0",
+  "titleId": "0100F00D53414600",
+  "sourceCommit": "04ba6b93915f17ae5471c8b6f014b15b6253cb8f",
+  "workflowRun": 38525559984,
+  "sha256": "c985677eb6a2dbc7d69f8c7bfffe7f708960f0d5c8a794ebb14a96ea59f5e07c",
+  "bytes": 21712088,
+  "parts": [
+    "Hongguo-Switch-1.0.0.nsp.part01",
+    "Hongguo-Switch-1.0.0.nsp.part02",
+    "Hongguo-Switch-1.0.0.nsp.part03"
+  ],
+  "nativeBuildPassed": true,
+  "packageStructurePassed": true,
+  "nsoSegmentHashesPassed": true,
+  "ncaContentHashesPassed": true,
+  "baseVersionUserConfirmed": "0.1.9-test.1",
+  "basePlaybackAndFeaturesUserConfirmed": true,
+  "userAuthorizedFormalRelease": true,
+  "newUIFeaturesHardwareTested": false,
+  "developerHardwareTested": false,
+  "newFeatures": [
+    "ZR横竖屏快捷键",
+    "每100集分组选择",
+    "首页露出下一张封面一部分并提示向右滑动"
+  ]
+}
