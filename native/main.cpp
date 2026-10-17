@@ -389,9 +389,9 @@ resetTrace();trace("startup:ui_ready");
 #endif
   }
   catch(...){auto* text=new brls::Label();text->setText("应用初始化失败，请确认安装包完整。");brls::Application::pushActivity(new brls::Activity(text));}
-  int previewFrames=0;while(brls::Application::mainLoop()){
+  auto previewStarted=std::chrono::steady_clock::now();while(brls::Application::mainLoop()){
 #ifdef HONGGUO_PREVIEW
-    if(++previewFrames>600)break;
+    if(std::chrono::steady_clock::now()-previewStarted>std::chrono::seconds(20))break;
 #endif
   }trace("shutdown:begin");stopWorkers();save();return 0;
 }
