@@ -11,19 +11,21 @@
 - 播放中按 **ZR**，或使用播放菜单的“横竖切换”，在 0° 与 90° 间旋转视频，保持比例；L/R 仍为上一集/下一集。
 - 点击或拖动进度条跳转；长按播放画面 400ms 临时 2 倍速，松开、取消、暂停或切集恢复原倍速。
 - 名称为“红果短剧”，安装图标使用用户提供图片；界面按钮及操作说明为中文。
-- RomFS 内置 `hongguo.cfg`，SD 卡 `switch/hongguo.cfg` 可按项目覆盖。支持 `hwdec=auto/no/nvdec/nvdec-copy` 与 `source=app158/web`。
+- RomFS 内置 `hongguo.cfg`，SD 卡 `switch/hongguo.cfg` 可按项目覆盖。支持 `hwdec=auto/no/nvdec/nvdec-copy` 与 `source=phone/app158/web`。
 
 **本架构使用原仓库的 GPU OpenGL 渲染。build158 专用的 `renderer=deko3d` 不兼容，不能直接套用其渲染实现。用户已确认此适配版本能够播放；内容源不同剧集的可用性仍取决于服务端。**
 
 Title ID 沿用仓库 `0100F00D53414600`，与上传的 build158 不同。源码许可证与来源声明沿用 LICENSE、NOTICE.md 和 licenses/。
 
-## 播放接口故障修复（2026-10-18）
+## 新版取流适配（2026-10-18）
 
-本次在线检查中，单集 `video_model` 返回 HTTP 200 空响应；参考项目 hongguoTV 的 `multi_video_model` 返回“未知异常”。这说明 App 播放接口当前无法提供有效片源，不能仅靠更换接口保证所有剧集恢复。官网示例首集的公开 MP4 及两个不同位置的 Range 请求正常。
+根据用户亲测可播放的 [HongguoTV-Phone-TV-NoAds](https://github.com/qq294716498/HongguoTV-Phone-TV-NoAds/tree/c356be4d1dccc187ece42aecf88a4688ef91d67e) 重新实现 Switch 取流适配层。默认 `source=phone` 使用 7.3.5.32 App 参数、`content_type=1` / `video_platform=3` 请求，解析直接返回的 `video_list`、嵌套视频信息、Base64 备用地址与新版媒体密钥。App 失败时尝试对应集的官网公开 MP4，再尝试参考项目使用的备用解析接口，包括其 v2 加密响应。
 
-修复后的默认策略：单集接口失败或返回空资源时，使用参考项目的批量请求格式重新签名请求；App 片源仍不可用时，尝试官网为当前集公开提供的 MP4。保留 `source=web` 的官网优先行为。回退只接受与当前分集 ID 匹配的 VideoObject，不使用推荐视频或其他集代替；指定清晰度时不静默替换为官网画质。未公开的集数仍可能无法播放，并显示明确提示。
+保留手柄操作、收藏、历史、分组、画质与播放器。`source=app158` 保留旧接口兼容模式（单集失败后尝试批量接口及官网），`source=web` 保留官网优先模式。已有 SD 卡 `switch/hongguo.cfg` 会覆盖内置配置；要使用新版流程，请将其中的 `source` 改为 `phone` 或移除该项。
 
-执行 `node tests/playback_fallback.cjs` 验证接口回退、空资源、分集身份与缓存处理。已有 JavaScript 和主机端 C++ 回归检查通过；官网分段网络探测通过。未完成 Switch 实机播放验证，仓库既有 Release 安装包不包含此次源码修复。
+所有官网回退严格验证当前分集 ID，不以试看或推荐视频替代。备用接口是参考项目使用的第三方服务，其可用性受上游与网络影响；返回需要二次解析或无效媒体时拒绝播放。没有有效片源的剧集仍可能失败，不宣称全部剧集恢复。
+
+旧版在线检查：单集接口 HTTP 200 空响应，参考 hongguoTV 批量接口返回“未知异常”。官网示例首集及第 2 集通过完整取流和不同位置的 Range 读取。JavaScript、主机端 C++ 回归通过；新增 PhoneSource 测试同时使用 Node 和 Switch Buffer/crypto 适配层验证签名、媒体密钥与 v2 响应。未完成 Switch 实机播放验证，既有 Release 安装包不包含此次修改。
 
 ## 构建
 
@@ -38,6 +40,8 @@ cmake --build build --target package-input -j2
 ## 回归检查
 
 ```sh
+node tests/phone_source.cjs
+node tests/playback_fallback.cjs
 node tests/build158_source.cjs
 node tests/cache_clear.cjs
 node tests/adapter_refresh.cjs

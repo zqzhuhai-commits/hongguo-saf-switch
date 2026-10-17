@@ -30,7 +30,7 @@ function context(){const ctx={require,Buffer,URLSearchParams,console};vm.createC
  vm.runInContext(fs.readFileSync('romfs/adapter.js','utf8'),ctx);
  assert.equal((await ctx.SwitchAPI.open('123')).source,'web');assert.equal(modelCalls,2);assert.equal(webCalls,1);
  assert.equal(await ctx.SwitchAPI.read('123',0,15),media.toString('hex'));
- wrong=true;await assert.rejects(ctx.SwitchAPI.open('123'),/官网暂未提供/);
+ wrong=true;await assert.rejects(ctx.SwitchAPI.open('123'),/片源均不可用/);
  await assert.rejects(ctx.SwitchAPI.read('123',0,15),/Range/);
  console.log('PASS: signed single/batch requests; retry on network, empty model and empty resources; exact ID; valid-only cache; default app-to-public fallback; no stale/wrong episode playback');
 })().catch(e=>{console.error(e);process.exitCode=1});

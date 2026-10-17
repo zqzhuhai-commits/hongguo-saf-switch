@@ -65,8 +65,8 @@ void Backend::evaluate(const std::string& script,const char* name){JSValue value
 Backend::Backend(){
   runtime=JS_NewRuntime();if(!runtime)throw std::runtime_error("Runtime init");JS_SetMemoryLimit(runtime,256*1024*1024);JS_SetMaxStackSize(runtime,256*1024);context=JS_NewContext(runtime);if(!context)throw std::runtime_error("Context init");
   JS_SetContextOpaque(context,this);JSValue global=JS_GetGlobalObject(context);JS_SetPropertyStr(context,global,"__hash",JS_NewCFunction(context,hashFn,"__hash",2));JS_SetPropertyStr(context,global,"__aes",JS_NewCFunction(context,aesFn,"__aes",4));JS_SetPropertyStr(context,global,"__http",JS_NewCFunction(context,httpFn,"__http",4));JS_FreeValue(context,global);
-  auto config=AppConfig::load();const auto source=config.get("source","app158");evaluate("globalThis.SwitchConfig={source:"+Json(source=="web"?"web":"app158").dump()+"};","config");
-  for(const char* file:{"deps.js","prelude.js","hongguo.cjs","adapter.js"}){std::ifstream in(std::string("romfs:/")+file);if(!in)throw std::runtime_error("Backend resource missing");std::string script((std::istreambuf_iterator<char>(in)),{});evaluate(script,file);}
+  auto config=AppConfig::load();const auto source=config.get("source","phone");evaluate("globalThis.SwitchConfig={source:"+Json(source=="web"?"web":source=="app158"?"app158":"phone").dump()+"};","config");
+  for(const char* file:{"deps.js","prelude.js","hongguo.cjs","phone_source.js","adapter.js"}){std::ifstream in(std::string("romfs:/")+file);if(!in)throw std::runtime_error("Backend resource missing");std::string script((std::istreambuf_iterator<char>(in)),{});evaluate(script,file);}
 }
 Backend::~Backend(){if(transport)curl_easy_cleanup(transport);if(context)JS_FreeContext(context);if(runtime)JS_FreeRuntime(runtime);}
 Json Backend::call(const std::string& function,const Json& args){

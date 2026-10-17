@@ -140,6 +140,30 @@ async function prepare(stream) {
   try {return await stream.preparePromise;} finally {delete stream.preparePromise;}
 }
 
+async function appMedia(value,quality,tier) {
+  const {info,rows}=value;let stream=null;
+
+      const compatible = Array.from(rows).filter(row => !['bytevc2','bvc2'].includes(String(row.item.codec_type || '').toLowerCase()));
+      const avc = compatible.filter(row => /^(avc|h264|h\.264|avc1)$/i.test(String(row.item.codec_type || '')));
+      const pool = avc.length ? avc : compatible;
+      const preferred=pool.filter(row=>api.qualityNumber(row.quality)<=quality);
+      const candidates=tier?compatible.filter(row=>String(row.key)===tier):[...preferred,...pool.filter(row=>!preferred.includes(row))];
+      if (!candidates.length) throw new Error('没有兼容的播放资源');
+      const seed = Buffer.from(String(info.key_seed || ''),'base64');
+      let lastError;
+      for(const selected of candidates.slice(0,3)){
+        for(const encoded of [...new Set([selected.item.main_url,selected.item.backup_url].filter(v=>typeof v==='string'&&v))])try{
+          let url=encoded;if(seed.length)url=api.decryptSpadeUrl(url,seed);
+          if(!/^https?:\/\//.test(url))throw new Error('播放地址无效');
+          const value={url,key:selected.item.phone ? selected.item.phone_key : selected.item.spade_a ? api.deriveContentKey(selected.item.spade_a) : null,quality:api.qualityLabel(selected.quality),codec:String(selected.item.codec_type || ''),source:selected.item.phone?'phone':'app'};
+          await prepare(value);stream={time:Date.now(),value};break;
+        }catch(error){lastError=error;}
+        if(stream)break;
+      }
+      if(!stream)throw lastError || new Error('没有兼容的播放资源');
+  return stream;
+}
+
 const provider = {
   async home(page = 1, type = 'comic') {
     if(type==='comic'){
@@ -200,7 +224,7 @@ const provider = {
     if (!validId(id)) throw new Error('分集 ID 无效');
     if(typeof tier!=="string"||tier==="."||tier===".."||tier.length>64||!/^[a-zA-Z0-9_.-]*$/.test(tier))throw new Error('清晰度参数无效');
     const key = `${id}|desktop-${quality}${tier?'|tier:'+tier:''}`;
-    if (fresh) {api.streamCache.delete(key); api.videoInfoCache.delete(id);}
+    if (fresh) {api.streamCache.delete(key); api.videoInfoCache.delete(id);if(typeof PhoneSource!=='undefined')PhoneSource.clear(id);}
     let stream = api.streamCache.get(key);
     if (!stream || Date.now()-stream.time>=240000) {
       stream=null;
@@ -210,31 +234,16 @@ const provider = {
         stream={time:Date.now(),value:web};
       } else {
       try {
-      const {info,rows} = await api.fetchVideoInfo(id);
-      const compatible = Array.from(rows).filter(row => !['bytevc2','bvc2'].includes(String(row.item.codec_type || '').toLowerCase()));
-      const avc = compatible.filter(row => /^(avc|h264|h\.264|avc1)$/i.test(String(row.item.codec_type || '')));
-      const pool = avc.length ? avc : compatible;
-      const preferred=pool.filter(row=>api.qualityNumber(row.quality)<=quality);
-      const candidates=tier?compatible.filter(row=>String(row.key)===tier):[...preferred,...pool.filter(row=>!preferred.includes(row))];
-      if (!candidates.length) throw new Error('没有兼容的播放资源');
-      const seed = Buffer.from(String(info.key_seed || ''),'base64');
-      let lastError;
-      for(const selected of candidates.slice(0,3)){
-        for(const encoded of [...new Set([selected.item.main_url,selected.item.backup_url].filter(v=>typeof v==='string'&&v))])try{
-          let url=encoded;if(seed.length)url=api.decryptSpadeUrl(url,seed);
-          if(!/^https?:\/\//.test(url))throw new Error('播放地址无效');
-          const value={url,key:selected.item.spade_a ? api.deriveContentKey(selected.item.spade_a) : null,quality:api.qualityLabel(selected.quality),codec:String(selected.item.codec_type || '')};
-          await prepare(value);stream={time:Date.now(),value};break;
-        }catch(error){lastError=error;}
-        if(stream)break;
-      }
-      if(!stream)throw lastError || new Error('没有兼容的播放资源');
+      stream=await appMedia(await (globalThis.SwitchConfig?.source==='phone'?PhoneSource.videoInfo(id):api.fetchVideoInfo(id)),quality,tier);
       } catch (appError) {
         // Explicit web mode already tried the website above. In the default
         // mode, recover only with a public URL verified for this exact episode.
         if (tier || globalThis.SwitchConfig?.source === 'web') throw appError;
         try { stream={time:Date.now(),value:await publicWebStream(id)}; }
-        catch (_) { throw new Error('App 播放接口不可用，官网暂未提供本集的可用公开视频'); }
+        catch (_) {
+          if(globalThis.SwitchConfig?.source==='phone')try{stream=await appMedia(await PhoneSource.backup(episodeSeries.get(id),id),quality,tier);}catch(_){}
+          if(!stream)throw new Error('App、官网及备用片源均不可用，请稍后重试或选择其他剧集');
+        }
       }
       }
       api.streamCache.set(key,stream);
@@ -255,7 +264,7 @@ const provider = {
 
 const active=new Map();globalThis.SwitchAPI={qualities:async(id)=>{
  if(!validId(id))throw new Error('分集 ID 无效');if(globalThis.SwitchConfig?.source==='web')return [];
- const {rows}=await api.fetchVideoInfo(id);return Array.from(rows).filter(r=>r.item.main_url&&!['bytevc2','bvc2'].includes(String(r.item.codec_type||'').toLowerCase())).filter(r=>/^[a-zA-Z0-9_.-]{1,64}$/.test(String(r.key))).map(r=>({key:String(r.key),label:api.qualityLabel(r.quality).slice(0,32),codec:String(r.item.codec_type||'').slice(0,16)}));
-},prefetch:async(id,q=480,tier="")=>{try{await provider.stream(id,q,false,tier);return {ready:true};}catch(_){return {ready:false};}},clearCache:()=>{const count=active.size+api.streamCache.size+api.videoInfoCache.size;active.clear();api.streamCache.clear();api.videoInfoCache.clear();return {entries:count};},home:provider.home,search:provider.search,detail:provider.detail,open:async(id,q=480,fresh=true,tier="")=>{active.delete(id);const s=await provider.stream(id,q,fresh,tier);active.set(id,s);while(active.size>2)active.delete(active.keys().next().value);return {total:s.total,quality:s.quality,codec:s.codec,source:s.source};},read:async(id,a,b)=>{const s=active.get(id);if(!s||a<0||b<a||b-a>=1048576)throw new Error('Range');return Buffer.from(await s.chunk(a,Math.min(b,s.total-1))).toString('hex');},selftest:()=>({protocol:protocolVector(),ctr:nativeCrypto.createDecipheriv('aes-128-ctr',Buffer.from('2b7e151628aed2a6abf7158809cf4f3c','hex'),Buffer.from('f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff','hex')).update(Buffer.from('874d6191b620e3261bef6864990db6ce','hex')).toString('hex'),cbc:nativeCrypto.createDecipheriv('aes-128-cbc',Buffer.from('2b7e151628aed2a6abf7158809cf4f3c','hex'),Buffer.from('000102030405060708090a0b0c0d0e0f','hex')).setAutoPadding(false).update(Buffer.from('7649abac8119b246cee98e9b12e9197d','hex')).toString('hex'),sm3:nativeCrypto.createHash('sm3').update('abc').digest('hex'),md5:nativeCrypto.createHash('md5').update('abc').digest('hex'),sha512:nativeCrypto.createHash('sha512').update('abc').digest('hex')})};
+ const {rows}=await (globalThis.SwitchConfig?.source==='phone'?PhoneSource.videoInfo(id):api.fetchVideoInfo(id));return Array.from(rows).filter(r=>r.item.main_url&&!['bytevc2','bvc2'].includes(String(r.item.codec_type||'').toLowerCase())).filter(r=>/^[a-zA-Z0-9_.-]{1,64}$/.test(String(r.key))).map(r=>({key:String(r.key),label:api.qualityLabel(r.quality).slice(0,32),codec:String(r.item.codec_type||'').slice(0,16)}));
+},prefetch:async(id,q=480,tier="")=>{try{await provider.stream(id,q,false,tier);return {ready:true};}catch(_){return {ready:false};}},clearCache:()=>{const count=active.size+api.streamCache.size+api.videoInfoCache.size;active.clear();api.streamCache.clear();api.videoInfoCache.clear();if(typeof PhoneSource!=='undefined')PhoneSource.clear();return {entries:count};},home:provider.home,search:provider.search,detail:provider.detail,open:async(id,q=480,fresh=true,tier="")=>{active.delete(id);const s=await provider.stream(id,q,fresh,tier);active.set(id,s);while(active.size>2)active.delete(active.keys().next().value);return {total:s.total,quality:s.quality,codec:s.codec,source:s.source};},read:async(id,a,b)=>{const s=active.get(id);if(!s||a<0||b<a||b-a>=1048576)throw new Error('Range');return Buffer.from(await s.chunk(a,Math.min(b,s.total-1))).toString('hex');},selftest:()=>({protocol:protocolVector(),ctr:nativeCrypto.createDecipheriv('aes-128-ctr',Buffer.from('2b7e151628aed2a6abf7158809cf4f3c','hex'),Buffer.from('f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff','hex')).update(Buffer.from('874d6191b620e3261bef6864990db6ce','hex')).toString('hex'),cbc:nativeCrypto.createDecipheriv('aes-128-cbc',Buffer.from('2b7e151628aed2a6abf7158809cf4f3c','hex'),Buffer.from('000102030405060708090a0b0c0d0e0f','hex')).setAutoPadding(false).update(Buffer.from('7649abac8119b246cee98e9b12e9197d','hex')).toString('hex'),sm3:nativeCrypto.createHash('sm3').update('abc').digest('hex'),md5:nativeCrypto.createHash('md5').update('abc').digest('hex'),sha512:nativeCrypto.createHash('sha512').update('abc').digest('hex')})};
 
 globalThis.protocolVector=()=>{const d=Date.now,r=Math.random;Date.now=()=>1791875000123;Math.random=()=>0.123456789;try{return nativeCrypto.createHash('md5').update(JSON.stringify(signedVideoRequest(JSON.stringify({mixed_video_id_map:{'1004':['1234567890123456789']}})).headers)).digest('hex');}finally{Date.now=d;Math.random=r;}};
