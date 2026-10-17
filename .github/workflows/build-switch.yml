@@ -32,6 +32,30 @@ jobs:
           name: playback-probe
           path: build/playback-probe.json
           retention-days: 30
+  screenshots:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install preview dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake pkg-config libglfw3-dev libmpv-dev libcurl4-openssl-dev libmbedtls-dev libdbus-1-dev xvfb xauth imagemagick ffmpeg
+      - name: Build the shared native UI for desktop preview
+        run: |
+          sh scripts/fetch-deps.sh
+          cmake -S . -B build-preview -DHONGGUO_PREVIEW=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-preview -j2
+      - name: Capture all interface previews
+        run: xvfb-run -a -s '-screen 0 1280x720x24' sh scripts/capture-preview.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: native-ui-previews
+          path: |
+            build/screenshots/
+            build/preview-*.log
+          retention-days: 30
   build:
     needs: protocol-tests
     runs-on: ubuntu-24.04

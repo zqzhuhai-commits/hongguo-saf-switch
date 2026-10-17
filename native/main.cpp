@@ -31,6 +31,10 @@
 #include <algorithm>
 #include <sys/stat.h>
 
+#ifdef HONGGUO_PREVIEW
+#include "fixtures.hpp"
+#include <cstdlib>
+#endif
 static Backend* backend=nullptr;
 static std::unique_ptr<DownloadQueue> downloads;
 static void startDownload(const Json& detail,int index);
@@ -168,6 +172,9 @@ class Player:public brls::Box {
     add("下载本集",[this]{startDownload(series,index);});add("清晰度",[this]{showQualities();});add("重试本集",[this]{retryNow();});add("隐藏菜单",[this]{showMenu(false);});add("返回列表",[]{brls::Application::popActivity();});addGrid(controls,buttons,4,12,8);firstControl=buttons.front();controls->setVisibility(brls::Visibility::GONE);addView(controls);timeline=new PlaybackTimeline([this](double at){seekTo(at);});timeline->detach();timeline->setDetachedPosition(24,644);timeline->setSize(brls::Size(1232,64));timeline->setVisibility(brls::Visibility::GONE);timeline->registerAction("控制菜单",brls::BUTTON_UP,[this](brls::View*){showMenu(true);return true;});addView(timeline);
   }
 public:
+#ifdef HONGGUO_PREVIEW
+  void previewMenu(){showMenu(true);}
+#endif
   Player(Json detail,int episode):brls::Box(brls::Axis::COLUMN),series(detail),episodes(detail.at("episodes")),index(episode){
     setGrow(1);setBackgroundColor(nvgRGB(0,0,0));setFocusable(true);setHideHighlight(true);appletSetMediaPlaybackState(true);if(library.contains("autoplay")&&library["autoplay"].is_boolean())policy.continuous=library["autoplay"].get<bool>();buildMenu();
     addGestureRecognizer(new PlaybackTouchGesture([this](brls::GestureState state,brls::Point point){screenTouch(state,point);}));
@@ -281,7 +288,7 @@ static brls::View* posterTile(const Json& row,float width){
 static brls::Label* sectionTitle(const std::string& text){auto* label=new brls::Label();label->setText(text);label->setFontSize(25);label->setTextColor(nvgRGB(255,255,255));label->setHorizontalAlign(brls::HorizontalAlign::LEFT);label->setMarginTop(20);label->setMarginBottom(10);return label;}
 static void startDownload(const Json& detail,int index){
   if(!downloads||index<0||index>=(int)detail.at("episodes").size())return;
-  const auto episode=detail.at("episodes").at(index),id=episode.at("id").get<std::string>();
+  const auto episode=detail.at("episodes").at(index);const auto id=episode.at("id").get<std::string>();
   const std::string title=detail.value("title",std::string())+" · 第 "+std::to_string(index+1)+" 集";
   if(!library.contains("downloads"))library["downloads"]=Json::array();for(const auto& row:library["downloads"])if(row.value("id",std::string())==id){message("本集已下载，可在下载页播放");return;}
   message(downloads->start(id,title,detail.value("id",std::string()),index+1)?"已加入后台下载，前台播放优先。可在下载页查看进度或取消。":"无法加入下载，请检查 SD 卡或已有任务");
@@ -359,12 +366,32 @@ public:
     registerAction("搜索",brls::BUTTON_X,[](brls::View*){openSearch();return true;});registerAction("刷新",brls::BUTTON_Y,[this](brls::View*){refresh();return true;});
     loadCatalog();trace("startup:home_ready");
   }
+#ifdef HONGGUO_PREVIEW
+  void previewScreen(const std::string& screen){if(screen=="favorites")showSaved(1);else if(screen=="history")showSaved(2);else if(screen=="category"){category="comic";selectedTab=3;loadCatalog();}}
+#endif
   ~HomeDashboard(){*alive=false;}
 };
 static brls::View* home(){return new HomeDashboard();}
 
-int main(int,char**){curl_global_init(CURL_GLOBAL_DEFAULT);if(!brls::Application::init())return 1;brls::Application::createWindow("红果短剧");brls::Application::setGlobalQuit(true);for(auto* theme:{&brls::Theme::getLightTheme(),&brls::Theme::getDarkTheme()}){theme->addColor("brls/highlight/color1",nvgRGB(255,121,101));theme->addColor("brls/highlight/color2",nvgRGB(255,173,146));theme->addColor("brls/click_pulse",nvgRGBA(255,121,101,45));}load();resetTrace();trace("startup:ui_ready");
-  try{if(!startWorkers())throw std::runtime_error("Worker initialization failed");backend=new Backend();mkdir("sdmc:/switch/hongguo-saf/downloads",0777);downloads=std::make_unique<DownloadQueue>("sdmc:/switch/hongguo-saf/downloads",[](const std::string& id,int64_t offset){auto result=backend->call("downloadSlice",Json::array({id,offset}));return DownloadChunk{result.at("total").get<int64_t>(),unhex(result.at("hex").get<std::string>())};},apiBackgroundTask,[](const DownloadStatus& item){brls::sync([item]{if(!library.contains("downloads"))library["downloads"]=Json::array();library["downloads"].push_back(Json{{"id",item.id},{"title",item.title},{"path",item.path},{"seriesId",item.seriesId},{"number",item.number}});save();});});trace("startup:backend_ready");const auto result=backend->call("selftest",Json::array());if(result.value("sm3",std::string())!="66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0")throw std::runtime_error("Self test");brls::Application::pushActivity(new brls::Activity(home()));}
+int main(int,char**){curl_global_init(CURL_GLOBAL_DEFAULT);if(!brls::Application::init())return 1;brls::Application::createWindow("红果短剧");brls::Application::setGlobalQuit(true);brls::Theme::getLightTheme()=brls::Theme::getDarkTheme();for(auto* theme:{&brls::Theme::getLightTheme(),&brls::Theme::getDarkTheme()}){theme->addColor("brls/highlight/color1",nvgRGB(255,121,101));theme->addColor("brls/highlight/color2",nvgRGB(255,173,146));theme->addColor("brls/click_pulse",nvgRGBA(255,121,101,45));}load();
+#ifdef HONGGUO_PREVIEW
+  glfwSetWindowSize(glfwGetCurrentContext(),1280,720);library["favorites"]=previewItems();library["history"]=Json::array();for(const auto& row:previewItems())library["history"].push_back(Json{{"series",row}});library["downloads"]=Json::array({Json{{"id","1000"},{"seriesId","1000"},{"title","暮色回响 · 第 1 集"},{"number",1},{"path","build/preview-video.mp4"}}});
+#endif
+resetTrace();trace("startup:ui_ready");
+  try{if(!startWorkers())throw std::runtime_error("Worker initialization failed");backend=new Backend();mkdir("sdmc:/switch/hongguo-saf/downloads",0777);downloads=std::make_unique<DownloadQueue>("sdmc:/switch/hongguo-saf/downloads",[](const std::string& id,int64_t offset){auto result=backend->call("downloadSlice",Json::array({id,offset}));return DownloadChunk{result.at("total").get<int64_t>(),unhex(result.at("hex").get<std::string>())};},apiBackgroundTask,[](const DownloadStatus& item){brls::sync([item]{if(!library.contains("downloads"))library["downloads"]=Json::array();library["downloads"].push_back(Json{{"id",item.id},{"title",item.title},{"path",item.path},{"seriesId",item.seriesId},{"number",item.number}});save();});});trace("startup:backend_ready");const auto result=backend->call("selftest",Json::array());if(result.value("sm3",std::string())!="66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0")throw std::runtime_error("Self test");auto* dashboard=home();brls::Application::pushActivity(new brls::Activity(dashboard));
+#ifdef HONGGUO_PREVIEW
+    const std::string screen=std::getenv("HONGGUO_PREVIEW_SCREEN")?std::getenv("HONGGUO_PREVIEW_SCREEN"):"home";
+    if(screen=="search")brls::Application::pushActivity(new brls::Activity(new Page("search",Json::array({"演示搜索",1,"short"}))));
+    else if(screen=="detail")showDetail(previewItems()[0]);
+    else if(screen=="downloads")openDownloads();
+    else if(screen=="player"||screen=="player-menu"){auto* player=new Player(previewDetail("1000"),0);brls::Application::pushActivity(new brls::Activity(player));if(screen=="player-menu")player->previewMenu();}
+    else static_cast<HomeDashboard*>(dashboard)->previewScreen(screen);
+#endif
+  }
   catch(...){auto* text=new brls::Label();text->setText("应用初始化失败，请确认安装包完整。");brls::Application::pushActivity(new brls::Activity(text));}
-  while(brls::Application::mainLoop()){}trace("shutdown:begin");stopWorkers();save();return 0;
+  int previewFrames=0;while(brls::Application::mainLoop()){
+#ifdef HONGGUO_PREVIEW
+    if(++previewFrames>600)break;
+#endif
+  }trace("shutdown:begin");stopWorkers();save();return 0;
 }

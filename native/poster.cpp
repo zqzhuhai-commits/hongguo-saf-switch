@@ -16,6 +16,9 @@ size_t receive(char* data,size_t size,size_t count,void* context) {
 }
 }
 PosterPixels fetchPoster(const std::string& address,const std::atomic<bool>& alive) {
+#ifdef HONGGUO_PREVIEW
+  if(address.rfind("preview:",0)==0){PosterPixels image;const int index=std::stoi(address.substr(8));image.rgba.resize(image.width*image.height*4);for(int y=0;y<image.height;y++)for(int x=0;x<image.width;x++){const size_t at=(y*image.width+x)*4;image.rgba[at]=45+index*19+(y*35/image.height);image.rgba[at+1]=48+index*10;image.rgba[at+2]=85+index*12+(x*25/image.width);image.rgba[at+3]=255;}return image;}
+#endif
   std::string url=address;if(url.rfind("//",0)==0)url="https:"+url;else if(url.rfind("http://",0)==0)url="https://"+url.substr(7);
   PosterPixels result;
   if(url.rfind("https://",0)!=0 || url.size()>8192 || !alive.load()){trace("poster:invalid_or_cancelled");return result;}trace("poster:download_begin");

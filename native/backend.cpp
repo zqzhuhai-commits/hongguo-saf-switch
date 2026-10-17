@@ -69,7 +69,14 @@ Backend::Backend(){
   for(const char* file:{"deps.js","prelude.js","hongguo.cjs","phone_source.js","adapter.js"}){std::ifstream in(std::string("romfs:/")+file);if(!in)throw std::runtime_error("Backend resource missing");std::string script((std::istreambuf_iterator<char>(in)),{});evaluate(script,file);}
 }
 Backend::~Backend(){if(transport)curl_easy_cleanup(transport);if(context)JS_FreeContext(context);if(runtime)JS_FreeRuntime(runtime);}
+#ifdef HONGGUO_PREVIEW
+#include "fixtures.hpp"
+#endif
 Json Backend::call(const std::string& function,const Json& args){
+#ifdef HONGGUO_PREVIEW
+  if(function!="selftest")return previewCall(function,args);
+#endif
+
   if(!inApiWorker()){
     auto task=std::make_shared<std::packaged_task<Json()>>([this,function,args]{return call(function,args);});
     auto result=task->get_future();
