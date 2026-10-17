@@ -4,6 +4,7 @@
 #include "episode_groups.hpp"
 #include "stream_request.hpp"
 #include "poster.hpp"
+#include "download_queue.hpp"
 #include "workers.hpp"
 #include "playback_policy.hpp"
 #include "playback_touch.hpp"
@@ -31,6 +32,9 @@
 #include <sys/stat.h>
 
 static Backend* backend=nullptr;
+static std::unique_ptr<DownloadQueue> downloads;
+static void startDownload(const Json& detail,int index);
+static void openDownloads();
 static Json library;
 static const char* store="sdmc:/switch/hongguo-saf/library.json";
 static void save(){try{std::ofstream out(std::string(store)+".tmp");out<<library.dump();out.close();if(out)std::rename((std::string(store)+".tmp").c_str(),store);}catch(...){}}
@@ -138,7 +142,7 @@ class Player:public brls::Box {
   void stopHold(){if(holdApplied&&mpv){double rate=hold.previousSpeed;mpv_set_property(mpv,"speed",MPV_FORMAT_DOUBLE,&rate);}holdApplied=false;hold.cancel();}
   void seekTo(double at){if(!mpv||failed||errorState||!loaded||duration<=0)return;stopHold();const std::string value=std::to_string(std::clamp(at,0.0,duration));const char* cmd[]={"seek",value.c_str(),"absolute",nullptr};if(mpv_command(mpv,cmd)>=0){position=std::clamp(at,0.0,duration);persist();}}
   void screenTouch(brls::GestureState state,brls::Point point){if(state==brls::GestureState::UNSURE){stopHold();const bool excluded=menuVisible&&(controls->getFrame().pointInside(point)||timeline->getFrame().pointInside(point));hold.begin(!excluded,touchTime(),point.x,point.y);}else if(state==brls::GestureState::STAY){if(!getFrame().pointInside(point)){stopHold();return;}if(hold.tick(touchTime(),point.x,point.y)&&mpv&&!failed&&!errorState&&loaded&&!paused){hold.previousSpeed=1;mpv_get_property(mpv,"speed",MPV_FORMAT_DOUBLE,&hold.previousSpeed);double rate=2;holdApplied=mpv_set_property(mpv,"speed",MPV_FORMAT_DOUBLE,&rate)>=0;}}else if(state==brls::GestureState::END){const bool tap=hold.isTap();stopHold();if(tap)showMenu(!menuVisible);}else if(state==brls::GestureState::INTERRUPTED)stopHold();}
-  void persist(){if(opened&&(position>0||duration>0)&&index>=0&&index<(int)episodes.size())record(series,episodes[index],index,position,duration);}
+  void persist(){if(opened&&(position>0||duration>0)&&index>=0&&index<(int)episodes.size())record(series,episodes[index],episodes[index].value("number",index+1)-1,position,duration);}
   void showMenu(bool visible){stopHold();menuVisible=visible;if(!visible)brls::Application::giveFocus(this);controls->setVisibility(visible?brls::Visibility::VISIBLE:brls::Visibility::GONE);timeline->setVisibility(visible?brls::Visibility::VISIBLE:brls::Visibility::GONE);if(visible&&firstControl)brls::Application::giveFocus(firstControl);}
   void togglePause(){stopHold();if(errorState){retryNow();return;}if(!mpv||failed)return;paused=!paused;int value=paused;mpv_set_property(mpv,"pause",MPV_FORMAT_FLAG,&value);}
   void seek(int seconds){if(!mpv||failed||errorState)return;const std::string value=std::to_string(seconds);const char* cmd[]={"seek",value.c_str(),"relative",nullptr};mpv_command(mpv,cmd);}
@@ -146,7 +150,7 @@ class Player:public brls::Box {
   void rotateVideo(){stopHold();if(!mpv||failed)return;int64_t angle=rotation==0?90:0;if(mpv_set_property(mpv,"video-rotate",MPV_FORMAT_INT64,&angle)>=0)rotation=(int)angle;else status="当前视频暂不支持方向切换";}
   void retryNow(){if(mpv&&renderer&&!failed)startEpisode(index,false,true);}
   void scheduleRetry(){stopHold();timeline->reset();errorState=true;if(policy.pending)return;auto wait=policy.scheduleRetry();if(!wait){status="本集暂时无法播放，可重试或选择其他分集。";showMenu(true);return;}trace("playback:retry_scheduled:"+std::to_string(policy.retries));status="正在重新获取播放源（重试 "+std::to_string(policy.retries)+"/3）…";auto flag=alive;const auto token=policy.generation;retryDelay=brls::delay(*wait,[this,flag,token]{if(!flag->load())return;if(policy.consumeRetry(token)){retryDelay=0;startEpisode(index,true);}});}
-  void startEpisode(int target,bool retry=false,bool fresh=false,bool preservePause=false){if(!mpv||!renderer||failed||target<0||target>=(int)episodes.size())return;stopHold();timeline->reset();if(retryDelay){brls::cancelDelay(retryDelay);retryDelay=0;}resumePaused=preservePause?paused:(retry?resumePaused:false);if(target!=index){selectedTier.clear();selectedQuality="自动";}policy.begin(retry);warmGeneration->store(policy.generation);warmScheduled=false;loadStarted=touchTime();persist();index=target;position=0;duration=0;opened=true;resumeTarget=0;for(const auto& row:library["history"])if(row.value("episodeId",std::string())==episodes[index].value("id",std::string()))resumeTarget=row.value("position",0.0)/1000;nextQueued=false;paused=false;errorState=false;loaded=false;int unpause=0;mpv_set_property(mpv,"pause",MPV_FORMAT_FLAG,&unpause);status=retry?"正在重新连接（重试 "+std::to_string(policy.retries)+"/3）…":"正在连接播放源…";{std::lock_guard<std::mutex> lock(playbackErrorMutex);playbackErrorId.clear();playbackError.clear();}const auto url="saf://"+episodes[index].at("id").get<std::string>()+"/"+selectedTier+"/"+((retry||fresh)?"1":"0");const char* command[]={"loadfile",url.c_str(),"replace",nullptr};trace("playback:load_begin");if(mpv_command(mpv,command)<0)scheduleRetry();}
+  void startEpisode(int target,bool retry=false,bool fresh=false,bool preservePause=false){if(!mpv||!renderer||failed||target<0||target>=(int)episodes.size())return;stopHold();timeline->reset();if(retryDelay){brls::cancelDelay(retryDelay);retryDelay=0;}resumePaused=preservePause?paused:(retry?resumePaused:false);if(target!=index){selectedTier.clear();selectedQuality="自动";}policy.begin(retry);warmGeneration->store(policy.generation);warmScheduled=false;loadStarted=touchTime();persist();index=target;position=0;duration=0;opened=true;resumeTarget=0;for(const auto& row:library["history"])if(row.value("episodeId",std::string())==episodes[index].value("id",std::string()))resumeTarget=row.value("position",0.0)/1000;nextQueued=false;paused=false;errorState=false;loaded=false;int unpause=0;mpv_set_property(mpv,"pause",MPV_FORMAT_FLAG,&unpause);status=retry?"正在重新连接（重试 "+std::to_string(policy.retries)+"/3）…":"正在连接播放源…";{std::lock_guard<std::mutex> lock(playbackErrorMutex);playbackErrorId.clear();playbackError.clear();}const auto url=episodes[index].value("localPath",std::string()).empty()?"saf://"+episodes[index].at("id").get<std::string>()+"/"+selectedTier+"/"+((retry||fresh)?"1":"0"):episodes[index].at("localPath").get<std::string>();const char* command[]={"loadfile",url.c_str(),"replace",nullptr};trace("playback:load_begin");if(mpv_command(mpv,command)<0)scheduleRetry();}
   void showQualities(){
     if(!mpv||failed)return;stopHold();const auto id=episodes[index].at("id").get<std::string>();auto flag=alive;
     auto* list=new brls::Box(brls::Axis::COLUMN);auto* picker=::frame(list,"选择清晰度");back(picker);auto pickerFlag=picker->alive;
@@ -157,11 +161,11 @@ class Player:public brls::Box {
       if(!ok||choices.empty()){auto* note=new brls::Label();note->setText(ok?"本片源暂未提供其他清晰度":"清晰度读取失败，请返回后重试");list->addView(note);}brls::Application::giveFocus(automatic);
     });});
   }
-  void buildMenu(){controls=new brls::Box(brls::Axis::COLUMN);controls->detach();controls->setDetachedPosition(24,346);controls->setSize(brls::Size(1232,286));controls->setPadding(16);controls->setBackgroundColor(nvgRGBA(15,17,23,235));progress=new brls::Label();progress->setWidth(1200);progress->setHeight(24);progress->setFontSize(18);progress->setHorizontalAlign(brls::HorizontalAlign::LEFT);progress->setMarginBottom(12);controls->addView(progress);std::vector<brls::View*> buttons;
+  void buildMenu(){controls=new brls::Box(brls::Axis::COLUMN);controls->detach();controls->setDetachedPosition(24,290);controls->setSize(brls::Size(1232,342));controls->setPadding(16);controls->setBackgroundColor(nvgRGBA(15,17,23,235));progress=new brls::Label();progress->setWidth(1200);progress->setHeight(24);progress->setFontSize(18);progress->setHorizontalAlign(brls::HorizontalAlign::LEFT);progress->setMarginBottom(12);controls->addView(progress);std::vector<brls::View*> buttons;
     auto add=[&](const std::string& title,std::function<void()> fn){auto* button=new ClickableBox(brls::Axis::COLUMN);button->setWidth(284);button->setHeight(56);button->setPadding(10);button->setBackgroundColor(nvgRGB(42,46,58));auto* label=new brls::Label();label->setText(title);label->setFontSize(18);label->setHorizontalAlign(brls::HorizontalAlign::CENTER);button->addView(label);button->registerClickAction([fn](brls::View*){fn();return true;});buttons.push_back(button);};
     add("播放 / 暂停",[this]{togglePause();});add("后退 10 秒",[this]{seek(-10);});add("前进 10 秒",[this]{seek(10);});add("横竖切换",[this]{rotateVideo();});
     add("上一集",[this]{startEpisode(index-1);});add("下一集",[this]{startEpisode(index+1);});add("倍速",[this]{cycleSpeed();});add("自动连播 开 / 关",[this]{policy.continuous=!policy.continuous;library["autoplay"]=policy.continuous;save();});
-    add("清晰度",[this]{showQualities();});add("重试本集",[this]{retryNow();});add("隐藏菜单",[this]{showMenu(false);});add("返回列表",[]{brls::Application::popActivity();});addGrid(controls,buttons,4,12,8);firstControl=buttons.front();controls->setVisibility(brls::Visibility::GONE);addView(controls);timeline=new PlaybackTimeline([this](double at){seekTo(at);});timeline->detach();timeline->setDetachedPosition(24,644);timeline->setSize(brls::Size(1232,64));timeline->setVisibility(brls::Visibility::GONE);timeline->registerAction("控制菜单",brls::BUTTON_UP,[this](brls::View*){showMenu(true);return true;});addView(timeline);
+    add("下载本集",[this]{startDownload(series,index);});add("清晰度",[this]{showQualities();});add("重试本集",[this]{retryNow();});add("隐藏菜单",[this]{showMenu(false);});add("返回列表",[]{brls::Application::popActivity();});addGrid(controls,buttons,4,12,8);firstControl=buttons.front();controls->setVisibility(brls::Visibility::GONE);addView(controls);timeline=new PlaybackTimeline([this](double at){seekTo(at);});timeline->detach();timeline->setDetachedPosition(24,644);timeline->setSize(brls::Size(1232,64));timeline->setVisibility(brls::Visibility::GONE);timeline->registerAction("控制菜单",brls::BUTTON_UP,[this](brls::View*){showMenu(true);return true;});addView(timeline);
   }
 public:
   Player(Json detail,int episode):brls::Box(brls::Axis::COLUMN),series(detail),episodes(detail.at("episodes")),index(episode){
@@ -182,7 +186,7 @@ public:
     if(mpv&&!failed){for(int count=0;count<30;count++){mpv_event* event=mpv_wait_event(mpv,0);if(event->event_id==MPV_EVENT_NONE)break;if(event->event_id==MPV_EVENT_FILE_LOADED){status="";errorState=false;loaded=true;trace("playback:loaded:ms="+std::to_string(touchTime()-loadStarted));if(resumeTarget>0){const std::string at=std::to_string(resumeTarget);const char* seekCommand[]={"seek",at.c_str(),"absolute",nullptr};mpv_command(mpv,seekCommand);resumeTarget=0;}if(resumePaused){int p=1;mpv_set_property(mpv,"pause",MPV_FORMAT_FLAG,&p);paused=true;resumePaused=false;}}
       if(event->event_id==MPV_EVENT_END_FILE){auto* end=(mpv_event_end_file*)event->data;if(end&&end->reason==MPV_END_FILE_REASON_ERROR){trace("playback:failed");scheduleRetry();}else if(end&&end->reason==MPV_END_FILE_REASON_EOF&&!nextQueued){nextQueued=true;if(duration>0)position=duration;persist();const int next=policy.nextEpisode(index,(int)episodes.size());if(next>=0){auto flag=alive;const auto generation=policy.generation;brls::sync([this,flag,next,generation]{if(flag->load()&&generation==policy.generation)startEpisode(next);});}else{status=index+1==(int)episodes.size()?"本剧已播放完毕":"本集已结束，自动连播已关闭";showMenu(true);}}}
     }mpv_get_property(mpv,"time-pos",MPV_FORMAT_DOUBLE,&position);mpv_get_property(mpv,"duration",MPV_FORMAT_DOUBLE,&duration);if(armGetSystemTick()-lastSave>armNsToTicks(10000000000ULL)){lastSave=armGetSystemTick();persist();}}
-    if(prefetchEnabled&&loaded&&!errorState&&!warmScheduled&&duration-position>12&&position>2&&index+1<(int)episodes.size()){
+    if(!episodes[index].contains("localPath")&&prefetchEnabled&&loaded&&!errorState&&!warmScheduled&&duration-position>12&&position>2&&index+1<(int)episodes.size()){
       double buffered=0;mpv_get_property(mpv,"demuxer-cache-duration",MPV_FORMAT_DOUBLE,&buffered);
       if(buffered>=10){auto flag=alive;auto generation=warmGeneration;const auto token=policy.generation;const auto id=episodes[index+1].at("id").get<std::string>();const std::string tier;
         warmScheduled=apiBackgroundTask([flag,generation,token,id,tier]{if(!*flag||generation->load()!=token)return;try{const auto r=backend->call("prefetch",Json::array({id,480,tier}));trace(r.value("ready",false)?"prefetch:ready":"prefetch:deferred");}catch(...){trace("prefetch:deferred");}});
@@ -229,7 +233,7 @@ static void showDetail(const Json& series){auto* list=new brls::Box(brls::Axis::
       for(size_t i=bounds.first;i<bounds.second;i++){
         auto* button=new ClickableBox(brls::Axis::COLUMN);button->setWidth(106);button->setHeight(56);button->setPadding(12);button->setBackgroundColor(nvgRGB(35,38,49));
         auto* number=new brls::Label();number->setText(std::to_string(i+1));number->setFontSize(22);number->setHorizontalAlign(brls::HorizontalAlign::CENTER);button->addView(number);
-        button->registerClickAction([sharedDetail,i](brls::View*){brls::Application::pushActivity(new brls::Activity(new Player(*sharedDetail,(int)i)));return true;});buttons.push_back(button);
+        button->registerAction("下载本集",brls::BUTTON_X,[sharedDetail,i](brls::View*){startDownload(*sharedDetail,int(i));return true;});button->registerClickAction([sharedDetail,i](brls::View*){brls::Application::pushActivity(new brls::Activity(new Player(*sharedDetail,(int)i)));return true;});buttons.push_back(button);
       }
       addGrid(grid,buttons,10,10,12);
       for(size_t i=0;i<ranges->size();i++){(*ranges)[i]->setBackgroundColor(i==group?nvgRGB(180,50,70):nvgRGB(35,38,49));if(!buttons.empty())(*ranges)[i]->setCustomNavigationRoute(brls::FocusDirection::DOWN,buttons.front());}
@@ -275,6 +279,24 @@ static brls::View* posterTile(const Json& row,float width){
 }
 
 static brls::Label* sectionTitle(const std::string& text){auto* label=new brls::Label();label->setText(text);label->setFontSize(25);label->setTextColor(nvgRGB(255,255,255));label->setHorizontalAlign(brls::HorizontalAlign::LEFT);label->setMarginTop(20);label->setMarginBottom(10);return label;}
+static void startDownload(const Json& detail,int index){
+  if(!downloads||index<0||index>=(int)detail.at("episodes").size())return;
+  const auto episode=detail.at("episodes").at(index),id=episode.at("id").get<std::string>();
+  const std::string title=detail.value("title",std::string())+" · 第 "+std::to_string(index+1)+" 集";
+  if(!library.contains("downloads"))library["downloads"]=Json::array();for(const auto& row:library["downloads"])if(row.value("id",std::string())==id){message("本集已下载，可在下载页播放");return;}
+  message(downloads->start(id,title,detail.value("id",std::string()),index+1)?"已加入后台下载，前台播放优先。可在下载页查看进度或取消。":"无法加入下载，请检查 SD 卡或已有任务");
+}
+static void openDownloads(){
+  auto* root=new brls::Box(brls::Axis::COLUMN);auto* list=new brls::Box(brls::Axis::COLUMN);auto* page=frame(root,"下载 · 已完成项目可离线播放");back(page);auto flag=page->alive;
+  auto render=std::make_shared<std::function<void()>>();
+  auto* refresh=cell("刷新下载进度","进行中的任务可点击取消",[render]{if(*render)(*render)();});root->addView(refresh);root->addView(list);
+  *render=[list,flag,refresh]{if(!*flag)return;brls::Application::giveFocus(refresh);auto states=downloads?downloads->snapshot():std::vector<DownloadStatus>{};list->clearViews();
+    if(library.contains("downloads"))for(const auto& row:library["downloads"]){list->addView(cell(row.value("title",std::string("已下载视频")),"已完成 · 点击离线播放",[row]{Json detail={{"id",row.value("seriesId",row.at("id").get<std::string>())},{"title",row.at("title")},{"episodes",Json::array({Json{{"id",row.at("id")},{"localPath",row.at("path")},{"number",row.value("number",1)},{"title",row.at("title")}}})}};brls::Application::pushActivity(new brls::Activity(new Player(detail,0)));}));}
+    for(const auto& state:states)if(state.status!="已完成"){const auto progress=state.total?std::to_string(state.received*100/state.total)+"%":"等待片源";list->addView(cell(state.title,state.status+" · "+progress,[id=state.id]{downloads->cancel(id);message("已请求取消，当前分段结束后停止");}));}
+    if(states.empty()&&(!library.contains("downloads")||library["downloads"].empty()))list->addView(cell("暂无下载","分集按钮按 X，或在播放器菜单选择下载本集",[]{}));
+  };(*render)();brls::Application::pushActivity(new brls::Activity(page));
+}
+
 class NavigationIcon:public brls::View{
   int kind;bool active=false;
 public:
@@ -284,6 +306,7 @@ public:
     const float cx=x+w/2,cy=y+h/2;nvgStrokeColor(vg,active?nvgRGB(255,121,101):nvgRGB(169,167,179));nvgFillColor(vg,active?nvgRGB(255,121,101):nvgRGB(169,167,179));nvgStrokeWidth(vg,2.5f);nvgBeginPath(vg);
     if(kind==0){nvgCircle(vg,cx,cy,13);nvgStroke(vg);nvgBeginPath(vg);nvgMoveTo(vg,cx+6,cy-6);nvgLineTo(vg,cx+2,cy+2);nvgLineTo(vg,cx-6,cy+6);nvgLineTo(vg,cx-2,cy-2);nvgClosePath(vg);nvgFill(vg);}
     else if(kind==1){nvgMoveTo(vg,cx-9,cy+13);nvgLineTo(vg,cx-9,cy-12);nvgLineTo(vg,cx+9,cy-12);nvgLineTo(vg,cx+9,cy+13);nvgLineTo(vg,cx,cy+6);nvgClosePath(vg);nvgStroke(vg);}
+    else if(kind==3){nvgMoveTo(vg,cx,cy-12);nvgLineTo(vg,cx,cy+6);nvgLineTo(vg,cx-7,cy-1);nvgMoveTo(vg,cx,cy+6);nvgLineTo(vg,cx+7,cy-1);nvgMoveTo(vg,cx-11,cy+11);nvgLineTo(vg,cx+11,cy+11);nvgStroke(vg);}
     else{nvgArc(vg,cx,cy,13,-2.7f,2.7f,NVG_CW);nvgStroke(vg);nvgBeginPath(vg);nvgMoveTo(vg,cx,cy-8);nvgLineTo(vg,cx,cy);nvgLineTo(vg,cx+7,cy+4);nvgStroke(vg);nvgBeginPath(vg);nvgMoveTo(vg,cx-16,cy-5);nvgLineTo(vg,cx-11,cy-2);nvgLineTo(vg,cx-7,cy-7);nvgStroke(vg);}
   }
 };
@@ -326,8 +349,8 @@ public:
     auto* search=button("搜索",92,openSearch);toolbar->addView(search);toolbar->addView(button("刷新",92,[this]{refresh();}));toolbar->addView(button("清缓存",112,[this]{clearCache();}));addView(toolbar);
     auto* body=new brls::Box(brls::Axis::ROW);body->setGrow(1);body->setShrink(1);addView(body);
     auto* sidebar=new brls::Box(brls::Axis::COLUMN);sidebar->setWidth(116);sidebar->setShrink(0);sidebar->setMarginRight(12);body->addView(sidebar);auto* divider=new brls::Box(brls::Axis::COLUMN);divider->setWidth(1);divider->setShrink(0);divider->setMarginRight(19);divider->setBackgroundColor(nvgRGB(47,48,56));body->addView(divider);
-    const std::vector<std::string> names={"发现","追剧","最近观看"};
-    for(size_t i=0;i<names.size();i++){auto* item=new ClickableBox(brls::Axis::COLUMN);item->setWidth(116);item->setHideHighlightBackground(true);item->setHighlightCornerRadius(14);item->setHeight(108);item->setPadding(12,10,12,10);item->setMarginBottom(12);item->setCornerRadius(14);auto* icon=new NavigationIcon(int(i));item->addView(icon);railIcons.push_back(icon);auto* textView=label(names[i],i==2?18:22,nvgRGB(169,167,179));textView->setHorizontalAlign(brls::HorizontalAlign::CENTER);textView->setMarginTop(8);item->addView(textView);rail.push_back(item);railLabels.push_back(textView);item->registerClickAction([this,i](brls::View*){if(i==0){page=1;loadCatalog();}else showSaved(int(i));return true;});sidebar->addView(item);}
+    const std::vector<std::string> names={"发现","追剧","最近观看","下载"};
+    for(size_t i=0;i<names.size();i++){auto* item=new ClickableBox(brls::Axis::COLUMN);item->setWidth(116);item->setHideHighlightBackground(true);item->setHighlightCornerRadius(14);item->setHeight(108);item->setPadding(12,10,12,10);item->setMarginBottom(12);item->setCornerRadius(14);auto* icon=new NavigationIcon(int(i));item->addView(icon);railIcons.push_back(icon);auto* textView=label(names[i],i==2?18:22,nvgRGB(169,167,179));textView->setHorizontalAlign(brls::HorizontalAlign::CENTER);textView->setMarginTop(8);item->addView(textView);rail.push_back(item);railLabels.push_back(textView);item->registerClickAction([this,i](brls::View*){if(i==0){page=1;loadCatalog();}else if(i==3)openDownloads();else showSaved(int(i));return true;});sidebar->addView(item);}
     auto* main=new brls::Box(brls::Axis::COLUMN);main->setGrow(1);main->setShrink(1);body->addView(main);
     filters=new brls::HScrollingFrame();filters->setHeight(64);filters->setShrink(0);auto* categories=new brls::Box(brls::Axis::ROW);
     const std::vector<std::pair<std::string,std::string>> tabs={{"全部","short"},{"最新","latest"},{"真人剧","human"},{"漫剧","comic"},{"AI 剧","ai"},{"剧情","drama"},{"古装","ancient"},{"喜剧","comedy"},{"奇幻","fantasy"}};
@@ -341,7 +364,7 @@ public:
 static brls::View* home(){return new HomeDashboard();}
 
 int main(int,char**){curl_global_init(CURL_GLOBAL_DEFAULT);if(!brls::Application::init())return 1;brls::Application::createWindow("红果短剧");brls::Application::setGlobalQuit(true);for(auto* theme:{&brls::Theme::getLightTheme(),&brls::Theme::getDarkTheme()}){theme->addColor("brls/highlight/color1",nvgRGB(255,121,101));theme->addColor("brls/highlight/color2",nvgRGB(255,173,146));theme->addColor("brls/click_pulse",nvgRGBA(255,121,101,45));}load();resetTrace();trace("startup:ui_ready");
-  try{if(!startWorkers())throw std::runtime_error("Worker initialization failed");backend=new Backend();trace("startup:backend_ready");const auto result=backend->call("selftest",Json::array());if(result.value("sm3",std::string())!="66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0")throw std::runtime_error("Self test");brls::Application::pushActivity(new brls::Activity(home()));}
+  try{if(!startWorkers())throw std::runtime_error("Worker initialization failed");backend=new Backend();mkdir("sdmc:/switch/hongguo-saf/downloads",0777);downloads=std::make_unique<DownloadQueue>("sdmc:/switch/hongguo-saf/downloads",[](const std::string& id,int64_t offset){auto result=backend->call("downloadSlice",Json::array({id,offset}));return DownloadChunk{result.at("total").get<int64_t>(),unhex(result.at("hex").get<std::string>())};},apiBackgroundTask,[](const DownloadStatus& item){brls::sync([item]{if(!library.contains("downloads"))library["downloads"]=Json::array();library["downloads"].push_back(Json{{"id",item.id},{"title",item.title},{"path",item.path},{"seriesId",item.seriesId},{"number",item.number}});save();});});trace("startup:backend_ready");const auto result=backend->call("selftest",Json::array());if(result.value("sm3",std::string())!="66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0")throw std::runtime_error("Self test");brls::Application::pushActivity(new brls::Activity(home()));}
   catch(...){auto* text=new brls::Label();text->setText("应用初始化失败，请确认安装包完整。");brls::Application::pushActivity(new brls::Activity(text));}
   while(brls::Application::mainLoop()){}trace("shutdown:begin");stopWorkers();save();return 0;
 }

@@ -77,7 +77,7 @@ Json Backend::call(const std::string& function,const Json& args){
     return result.get();
   }
   std::lock_guard<std::mutex> guard(lock);trace("api:"+function+":begin");JS_UpdateStackTop(runtime);
-  if(function!="home"&&function!="search"&&function!="detail"&&function!="open"&&function!="read"&&function!="selftest"&&function!="clearCache"&&function!="qualities"&&function!="prefetch")throw std::runtime_error("Invalid method");
+  if(function!="home"&&function!="search"&&function!="detail"&&function!="open"&&function!="read"&&function!="selftest"&&function!="clearCache"&&function!="qualities"&&function!="prefetch"&&function!="downloadSlice")throw std::runtime_error("Invalid method");
   evaluate("globalThis.__done=false;globalThis.__answer='';Promise.resolve(SwitchAPI["+Json(function).dump()+"](..."+args.dump()+")).then(v=>{globalThis.__answer=JSON.stringify({ok:true,value:v});globalThis.__done=true;},e=>{globalThis.__answer=JSON.stringify({ok:false,message:String(e&&e.message||'接口处理失败').replace(/https?:\\/\\/[^ ]+/g,'[地址]').slice(0,180)});globalThis.__done=true;});","rpc");
   JSContext* job=nullptr;const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(120);
   while(true){JSValue global=JS_GetGlobalObject(context);JSValue done=JS_GetPropertyStr(context,global,"__done");bool complete=JS_ToBool(context,done);JS_FreeValue(context,done);if(complete){JSValue answer=JS_GetPropertyStr(context,global,"__answer");std::string raw=text(context,answer);JS_FreeValue(context,answer);JS_FreeValue(context,global);Json result=Json::parse(raw);if(!result.value("ok",false))throw std::runtime_error(result.value("message",std::string("内容源或网络暂不可用")));trace("api:"+function+":complete");return result["value"];}JS_FreeValue(context,global);

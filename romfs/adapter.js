@@ -173,6 +173,8 @@ async function appMedia(value,quality,tier) {
 
 const provider = {
   async home(page = 1, type = 'comic') {
+    if(globalThis.SwitchConfig?.source==='phone'&&['short','human','comic','ai','latest'].includes(type))try{return await PhoneSource.catalog(page,type);}catch(_){}
+
     if(type==='comic'){
       try {return await publicComicPage(page);}
       catch (_) {const r=await appSearchPage('热门',19,page,24);return {items:cards(r.list),page,hasMore:r.hasMore};}
@@ -188,6 +190,8 @@ const provider = {
     return {items,page,totalPages,hasMore:items.length>0 && page<totalPages};
   },
   async search(keyword, page = 1, type = 'comic') {
+    if(globalThis.SwitchConfig?.source==='phone')try{return await PhoneSource.search(keyword,page);}catch(_){}
+
     const tabType = type === 'comic' ? 19 : 11;
     // Inspect the response rather than treating a missing search tab as an empty success.
     let cursor = {};
@@ -219,6 +223,9 @@ const provider = {
   },
   async detail(id) {
     if (!validId(id)) throw new Error('剧集 ID 无效');
+    if(globalThis.SwitchConfig?.source==='phone')try{
+      const detail=await PhoneSource.detail(id);for(const episode of detail.episodes)episodeSeries.set(episode.id,id);firstEpisodes.add(detail.episodes[0].id);return detail;
+    }catch(_){}
     const data = await api.routerData(`${SITE}/detail?series_id=${id}`);
     const series = data?.loaderData?.detail_page?.seriesDetail;
     if (!series || !Array.isArray(series.vid_list) || !series.vid_list.length || series.vid_list.length>2000) throw new Error('分集暂不可用');
@@ -271,7 +278,11 @@ const provider = {
 };
 
 
-const active=new Map();globalThis.SwitchAPI={qualities:async(id)=>{
+const active=new Map();globalThis.SwitchAPI={downloadSlice:async(id,start)=>{
+ if(!validId(id)||!Number.isSafeInteger(start)||start<0)throw new Error('下载分段无效');
+ const stream=await provider.stream(id,480,false);if(start>=stream.total)throw new Error('下载范围无效');
+ return {total:stream.total,hex:Buffer.from(await stream.chunk(start,Math.min(start+1048575,stream.total-1))).toString('hex')};
+},qualities:async(id)=>{
  if(!validId(id))throw new Error('分集 ID 无效');if(globalThis.SwitchConfig?.source==='web')return [];
  const {rows}=await (globalThis.SwitchConfig?.source==='phone'?PhoneSource.videoInfo(id):api.fetchVideoInfo(id));return Array.from(rows).filter(r=>r.item.main_url&&!['bytevc2','bvc2'].includes(String(r.item.codec_type||'').toLowerCase())).filter(r=>/^[a-zA-Z0-9_.-]{1,64}$/.test(String(r.key))).map(r=>({key:String(r.key),label:api.qualityLabel(r.quality).slice(0,32),codec:String(r.item.codec_type||'').slice(0,16)}));
 },prefetch:async(id,q=480,tier="")=>{try{await provider.stream(id,q,false,tier);return {ready:true};}catch(_){return {ready:false};}},clearCache:()=>{const count=active.size+api.streamCache.size+api.videoInfoCache.size;active.clear();api.streamCache.clear();api.videoInfoCache.clear();if(typeof PhoneSource!=='undefined')PhoneSource.clear();return {entries:count};},home:provider.home,search:provider.search,detail:provider.detail,open:async(id,q=480,fresh=true,tier="")=>{active.delete(id);const s=await provider.stream(id,q,fresh,tier);active.set(id,s);while(active.size>2)active.delete(active.keys().next().value);return {total:s.total,quality:s.quality,codec:s.codec,source:s.source};},read:async(id,a,b)=>{const s=active.get(id);if(!s||a<0||b<a||b-a>=1048576)throw new Error('Range');return Buffer.from(await s.chunk(a,Math.min(b,s.total-1))).toString('hex');},selftest:()=>({protocol:protocolVector(),ctr:nativeCrypto.createDecipheriv('aes-128-ctr',Buffer.from('2b7e151628aed2a6abf7158809cf4f3c','hex'),Buffer.from('f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff','hex')).update(Buffer.from('874d6191b620e3261bef6864990db6ce','hex')).toString('hex'),cbc:nativeCrypto.createDecipheriv('aes-128-cbc',Buffer.from('2b7e151628aed2a6abf7158809cf4f3c','hex'),Buffer.from('000102030405060708090a0b0c0d0e0f','hex')).setAutoPadding(false).update(Buffer.from('7649abac8119b246cee98e9b12e9197d','hex')).toString('hex'),sm3:nativeCrypto.createHash('sm3').update('abc').digest('hex'),md5:nativeCrypto.createHash('md5').update('abc').digest('hex'),sha512:nativeCrypto.createHash('sha512').update('abc').digest('hex')})};

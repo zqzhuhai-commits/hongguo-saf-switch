@@ -65,15 +65,51 @@ const PhoneSource = (() => {
     return addresses(page.video_player_info||{});
   }
   const cache=new Map();
-  async function videoInfo(id){
-    if(!valid(id))throw Error('分集 ID 无效');const hit=cache.get(id);if(hit&&Date.now()-hit.time<240000)return hit.value;
+  const parseJSON=text=>JSON.parse(String(text).replace(/"(?:\\.|[^"\\])*"|(-?\d{16,})(?=[,}\]\s])/g,(token,integer)=>integer?'"'+integer+'"':token));
+  async function appRequest(path,payload){
     const now=Date.now(),values={aid:'8662',app_name:'novelread',version_code:'73532',version_name:'7.3.5.32',manifest_version_code:'73532',update_version_code:'73532',channel:'update_64',device_platform:'android',os:'android',ssmix:'a',device_type:'25053RT47C',device_brand:'Redmi',language:'zh',os_api:'36',os_version:'16',resolution:'1280*2772',dpi:'520',ac:'wifi',device_id:deviceId,iid:installId,_rticket:String(now)};
     const query=pythonUrlEncode(Object.fromEntries(Object.entries(values).sort(([a],[b])=>a<b?-1:a>b?1:0))).replace(/\*/g,'%2A');
-    const body=JSON.stringify({biz_param:{need_all_video_definition:true,video_platform:3},content_type:1,video_id:id});
-    const response=await axios.post('https://api5-normal-sinfonlineb.fqnovel.com/novel/player/video_model/v1/?'+query,body,{headers:{'User-Agent':ua,Accept:'application/json','X-XS-From-Web':'0','Sdk-Version':'2','Content-Type':'application/json; charset=utf-8',...sign(query,body,now)},responseType:'text'});
-    const data=JSON.parse(response.data);if(response.status!==200||Number(data.code??data.Code??data.status_code??data.BaseResp?.StatusCode??0)!==0)throw Error('新版 App 播放接口暂不可用');
-    const raw=data.data?.video_model,model=typeof raw==='string'?JSON.parse(raw):raw,value=rowsFromModel(model);
+    const body=JSON.stringify(payload);
+    const response=await axios.post('https://api5-normal-sinfonlineb.fqnovel.com'+path+'?'+query,body,{headers:{'User-Agent':ua,Accept:'application/json','X-XS-From-Web':'0','Sdk-Version':'2','Content-Type':'application/json; charset=utf-8',...sign(query,body,now)},responseType:'text'});
+    const data=parseJSON(response.data);if(response.status!==200||Number(data.code??data.Code??data.status_code??data.BaseResp?.StatusCode??0)!==0)throw Error('新版 App 播放接口暂不可用');
+    return data;
+  }
+  async function videoInfo(id){
+    if(!valid(id))throw Error('分集 ID 无效');const hit=cache.get(id);if(hit&&Date.now()-hit.time<240000)return hit.value;
+    const data=await appRequest('/novel/player/video_model/v1/',{biz_param:{need_all_video_definition:true,video_platform:3},content_type:1,video_id:id});
+    const raw=data.data?.video_model,model=typeof raw==='string'?parseJSON(raw):raw,value=rowsFromModel(model);
     cache.set(id,{time:Date.now(),value});while(cache.size>4)cache.delete(cache.keys().next().value);return value;
+  }
+  function card(raw){const row=raw?.video_data||raw||{},id=String(row.series_id_str||row.series_id||'');return {id,title:String(row.series_title||row.series_name||row.title||''),cover:String(row.series_cover||row.cover||''),description:String(row.series_intro||''),badge:row.episode_cnt?'共 '+row.episode_cnt+' 集':String(row.episode_right_text||''),tags:Array.isArray(row.tags)?row.tags.map(x=>typeof x==='string'?x:x?.name||'').filter(Boolean).join(' / '):''};}
+  const catalogCursors=new Map();
+  async function catalog(page,type){
+    const genres={comic:['comic_series','comic_series'],ai:['ai_series','ai_series']},[genre,scene]=genres[type]||['short_play','default'];
+    const cursorKey=type+'|'+page,previous=catalogCursors.get(type+'|'+(page-1));
+    if(page>1&&!previous)throw Error('分类分页已过期，请刷新');
+    const offset=page>1?previous.offset:0;
+    const body={req_scene:scene,offset,limit:18,req_type:'only_content',need_selector_panel:false,client_req_type:offset?2:3,session_id:page>1?previous.session:'',filter_ids:'',select_items:{genre:[genre],sort:type==='latest'?['online_time']:[],gender:[],category_dim_theme:[],category_dim_role:[],category_dim_epoch:[],online_time:[],creation_status:[]}};
+    const data=(await appRequest('/reading/distribution/category/landpage/v/',body)).data;
+    if(!Array.isArray(data?.video_data)||typeof data.has_more!=='boolean')throw Error('新版分类数据格式异常');
+    const items=data.video_data.map(card).filter(x=>valid(x.id)&&x.title),next=Number(data.next_offset);
+    if(data.has_more&&(!Number.isSafeInteger(next)||next<=offset||!items.length))throw Error('分类分页未前进');
+    const session=String(data.session_id||'');if(session.length>4096||/[\r\n\0]/.test(session))throw Error('分类会话无效');
+    catalogCursors.set(cursorKey,{offset:next,session});while(catalogCursors.size>64)catalogCursors.delete(catalogCursors.keys().next().value);
+    return {items,page,hasMore:data.has_more};
+  }
+  async function detail(id){
+    if(!valid(id))throw Error('剧集 ID 无效');
+    const row=(await appRequest('/novel/player/video_detail/v1/',{series_id:id})).data?.video_data;
+    if(String(row?.series_id_str||row?.series_id)!==id||!Array.isArray(row?.video_list))throw Error('新版详情未返回所请求的剧集');
+    const episodes=row.video_list.map(v=>({id:String(v.vid),number:Number(v.vid_index),title:'第 '+v.vid_index+' 集',series:String(v.series_id||id)})).sort((a,b)=>a.number-b.number);
+    if(!episodes.length||episodes.length>2000||Number(row.episode_cnt)>episodes.length||new Set(episodes.map(v=>v.id)).size!==episodes.length||episodes.some((v,i)=>!valid(v.id)||v.number!==i+1||v.series!==id))throw Error('新版详情分集不完整');
+    return {...card(row),episodes:episodes.map(({series,...episode})=>episode)};
+  }
+  async function search(keyword,page){
+    if(typeof keyword!=='string'||!keyword.trim()||keyword.length>160||/[\x00-\x1f]/.test(keyword))throw Error('搜索词无效');
+    const html=await getText('https://hongguoduanju.com/search/'+encodeURIComponent(keyword)+(page>1?'?page='+page:''),{headers:{'User-Agent':'Mozilla/5.0',Referer:'https://hongguoduanju.com/'}});
+    const loaders=extractAssignedJson(html)?.loaderData||{},data=loaders['search_(keyword)/page']||Object.entries(loaders).find(([k])=>k.startsWith('search_'))?.[1];
+    if(data?.isSuccess!==true||String(data.query)!==keyword||!Array.isArray(data.searchList))throw Error('新版搜索没有有效结果');
+    const items=data.searchList.map(card).filter(x=>valid(x.id)&&x.title);return {items,page,hasMore:items.length>0&&Number(data.pagination?.totalPages||1)>page};
   }
   async function backup(series,id){
     if(!valid(series)||!valid(id))throw Error('备用取流缺少剧集 ID');
@@ -88,5 +124,5 @@ const PhoneSource = (() => {
     }catch(_){}
     if(!rows.length)throw Error('备用接口没有可用片源');return {info:{},rows:rows.sort((a,b)=>Number(b.quality)-Number(a.quality))};
   }
-  return {videoInfo,backup,publicAddresses,clear:id=>id?cache.delete(id):cache.clear(),sign,decode,contentKey,rowsFromModel};
+  return {videoInfo,backup,catalog,detail,search,publicAddresses,clear:id=>id?cache.delete(id):cache.clear(),sign,decode,contentKey,rowsFromModel};
 })();

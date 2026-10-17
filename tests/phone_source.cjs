@@ -22,5 +22,12 @@ function envelope(data){const material=Buffer.from(Array.from({length:32},(_,i)=
  assert.equal((await p.backup('456','123')).rows[0].item.phone_key.toString('hex'),key.toString('hex'));
  await assert.rejects(p.backup(undefined,'123'),/剧集 ID/);
  ctx.axios=async()=>({status:200,data:JSON.stringify({parse:1,key_urls:[]})});await assert.rejects(p.backup('456','123'),/直接媒体/);
+ const callsByPath=[];ctx.axios={post:async(url,body)=>{const request=JSON.parse(body);callsByPath.push({url,body:request});if(url.includes('/video_detail/'))return {status:200,data:'{"code":0,"data":{"video_data":{"series_id":7686713195246930968,"series_title":"Test","episode_cnt":2,"video_list":[{"vid":7686715217652223038,"vid_index":1},{"vid":7686715221565508670,"vid_index":2}]}}}'};return {status:200,data:JSON.stringify({code:0,data:{video_data:[{series_id_str:'123',series_title:'Test',episode_cnt:2}],has_more:true,next_offset:request.offset+18,session_id:'session'}})};}};
+ const complete=await p.detail('7686713195246930968');assert.equal(complete.episodes[0].id,'7686715217652223038');assert.equal(complete.episodes[1].number,2);
+ await p.catalog(1,'comic');await p.catalog(2,'comic');assert.equal(callsByPath.at(-1).body.offset,18);assert.equal(callsByPath.at(-1).body.session_id,'session');assert.equal(callsByPath.at(-1).body.select_items.genre[0],'comic_series');
+ await assert.rejects(p.catalog(9,'ai'),/分页已过期/);
+ ctx.axios.post=async()=>({status:200,data:JSON.stringify({data:{video_data:{series_id:'123',video_list:[{vid:'1',vid_index:2}]}}})});await assert.rejects(p.detail('123'),/不完整/);
+ ctx.axios=async()=>({status:200,data:'_ROUTER_DATA='+JSON.stringify({loaderData:{'search_(keyword)/page':{isSuccess:true,query:'Test',searchList:[{video_data:{series_id_str:'123',series_title:'Test'}}]}}})});
+ assert.equal((await p.search('Test',1)).items[0].id,'123');await assert.rejects(p.search('Other',1),/有效结果/);
  console.log('PASS: phone request version/platform/signature, direct video_list, base64 URLs, codec filtering, spade key, v2 envelope, backup flags and cache invalidation');
 })().catch(e=>{console.error(e);process.exitCode=1});

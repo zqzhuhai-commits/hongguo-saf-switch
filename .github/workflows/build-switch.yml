@@ -15,6 +15,23 @@ jobs:
           persist-credentials: false
       - name: Playback protocol regression tests
         run: for test in tests/*.cjs; do node "$test" || exit 1; done
+  playback-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Prepare decoder
+        run: command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+      - name: Decode real audio and video through the actual adapter
+        run: node scripts/probe-playback.cjs 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: playback-probe
+          path: build/playback-probe.json
+          retention-days: 30
   build:
     needs: protocol-tests
     runs-on: ubuntu-24.04
@@ -28,6 +45,7 @@ jobs:
         run: |
           g++ -std=c++17 -Inative tests/playback_policy.cpp -o /tmp/policy && /tmp/policy
           g++ -std=c++17 -Inative tests/playback_touch.cpp -o /tmp/touch && /tmp/touch
+          g++ -std=c++17 -Inative tests/download_queue.cpp -o /tmp/downloads && /tmp/downloads
           g++ -std=c++17 -Inative tests/app_config.cpp -o /tmp/config && /tmp/config
           g++ -std=c++17 -Inative tests/episode_groups.cpp -o /tmp/groups && /tmp/groups
           g++ -std=c++17 -Inative tests/stream_request.cpp -o /tmp/request && /tmp/request
