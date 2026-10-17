@@ -6,6 +6,7 @@ using Result=int;
 struct SwkbdConfig{};
 inline void svcSleepThread(int64_t ns){std::this_thread::sleep_for(std::chrono::nanoseconds(ns));}
 inline uint64_t armGetSystemTick(){return std::chrono::steady_clock::now().time_since_epoch().count();}
+inline uint64_t armNsToTicks(int64_t ns){return (uint64_t)ns;}
 inline void appletSetMediaPlaybackState(bool){}
 inline Result swkbdCreate(SwkbdConfig*,int){return -1;}
 inline void swkbdConfigMakePresetDefault(SwkbdConfig*){}
