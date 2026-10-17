@@ -40,10 +40,11 @@ jobs:
         with:
           persist-credentials: false
       - name: Install preview dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake pkg-config libglfw3-dev libmpv-dev libcurl4-openssl-dev libmbedtls-dev libdbus-1-dev xvfb xauth imagemagick ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y cmake pkg-config libglfw3-dev libmpv-dev libcurl4-openssl-dev libmbedtls-dev libdbus-1-dev xvfb xauth imagemagick ffmpeg fonts-noto-cjk libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
       - name: Build the shared native UI for desktop preview
         run: |
           sh scripts/fetch-deps.sh
+          cp /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc dependencies/nx-player/library/borealis/resources/font/font.ttf
           cmake -S . -B build-preview -DHONGGUO_PREVIEW=ON -DCMAKE_BUILD_TYPE=Release
           cmake --build build-preview -j2
       - name: Capture all interface previews
