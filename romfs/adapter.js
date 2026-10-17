@@ -209,6 +209,7 @@ const provider = {
       if (web) {
         stream={time:Date.now(),value:web};
       } else {
+      try {
       const {info,rows} = await api.fetchVideoInfo(id);
       const compatible = Array.from(rows).filter(row => !['bytevc2','bvc2'].includes(String(row.item.codec_type || '').toLowerCase()));
       const avc = compatible.filter(row => /^(avc|h264|h\.264|avc1)$/i.test(String(row.item.codec_type || '')));
@@ -228,6 +229,13 @@ const provider = {
         if(stream)break;
       }
       if(!stream)throw lastError || new Error('没有兼容的播放资源');
+      } catch (appError) {
+        // Explicit web mode already tried the website above. In the default
+        // mode, recover only with a public URL verified for this exact episode.
+        if (tier || globalThis.SwitchConfig?.source === 'web') throw appError;
+        try { stream={time:Date.now(),value:await publicWebStream(id)}; }
+        catch (_) { throw new Error('App 播放接口不可用，官网暂未提供本集的可用公开视频'); }
+      }
       }
       api.streamCache.set(key,stream);
       while(api.streamCache.size>4)api.streamCache.delete(api.streamCache.keys().next().value);
