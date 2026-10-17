@@ -77,6 +77,13 @@ async function publicWebStream(id) {
       return stream;
     }
   }
+  if(typeof PhoneSource!=='undefined'&&validId(sid)){
+    let urls=[];try{urls=PhoneSource.publicAddresses(html,sid,id);}catch(_){}
+    for(const url of urls)try{
+      const stream={url,key:null,quality:'官网',codec:'',source:'web',headers:{'User-Agent':'Mozilla/5.0',Referer:pageUrl}};
+      await prepare(stream);return stream;
+    }catch(_){}
+  }
   throw new Error('官网暂未提供本集的公开视频');
 }
 function repairVideoEntries(raw, header) {

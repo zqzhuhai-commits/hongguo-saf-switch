@@ -12,6 +12,8 @@ function envelope(data){const material=Buffer.from(Array.from({length:32},(_,i)=
  assert.equal(shim.phone.sign('a=1','{}',1792263994000)['X-Gorgon'],p.sign('a=1','{}',1792263994000)['X-Gorgon']);
  assert.equal(p.contentKey(spade()).toString('hex'),key.toString('hex'));assert.throws(()=>p.contentKey('bad'));assert.throws(()=>p.decode('v2.bad.eA=='));
  assert.equal(p.decode(envelope({parse:0,key_urls:[]})).parse,0);assert.equal(p.decode('{"parse":false}').parse,false);
+ const html='_ROUTER_DATA='+JSON.stringify({loaderData:{player_page:{vid:'123',series_id:'456',video_player_info:{main_url:'https://example.test/public'}}}});
+ assert.equal(p.publicAddresses(html,'456','123')[0],'https://example.test/public');assert.equal(p.publicAddresses(html,'456','999').length,0);
  const variant={video_meta:{codec_type:'h264',vheight:1280,vwidth:720},main_url:Buffer.from('https://example.test/video').toString('base64'),encrypt_info:{encrypt:true,spade_a:spade()}};
  const rows=p.rowsFromModel({video_list:[variant,{...variant,video_meta:{codec_type:'bytevc2'}}]});assert.equal(rows.rows.length,1);assert.equal(rows.rows[0].quality,'720');assert.equal(rows.rows[0].item.phone_key.toString('hex'),key.toString('hex'));
  let request,calls=0;ctx.axios=Object.assign(async()=>({status:200,data:envelope({parse:0,jx:'0',key_urls:[{name:'720P',src:'https://example.test/media',kid:'0'.repeat(32),spade_a:spade()}]})}),{post:async(url,body,options)=>{calls++;request={url,body:JSON.parse(body),options};return {status:200,data:JSON.stringify({code:0,data:{video_model:JSON.stringify({video_list:[variant]})}})};}});

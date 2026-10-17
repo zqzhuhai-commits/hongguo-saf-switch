@@ -3,7 +3,7 @@
 // native/core/provider_hongguo_{app,sign,native_media,playback}.go (c356be4).
 const PhoneSource = (() => {
   const ua='com.phoenix.read/73532 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)';
-  const identity=()=>String(1000000000000000000n+BigInt(Math.floor(Math.random()*Number.MAX_SAFE_INTEGER))*1000n);
+  const identity=()=>String(1000000000000000000n+BigInt(Math.floor(Math.random()*Number.MAX_SAFE_INTEGER))*1000n%8000000000000000000n);
   const deviceId=identity(),installId=identity();
   const valid=id=>typeof id==='string'&&/^\d{1,30}$/.test(id);
   const httpUrl=value=>typeof value==='string'&&value.length<=8192&&/^https?:\/\//.test(value);
@@ -58,6 +58,12 @@ const PhoneSource = (() => {
     if(!rows.length)throw Error('新版 App 未返回兼容片源');
     return {info:{},rows:rows.sort((a,b)=>Number(b.quality)-Number(a.quality))};
   }
+  function publicAddresses(html,series,id){
+    const route=extractAssignedJson(html),loaders=route?.loaderData||{};
+    const page=Object.entries(loaders).find(([name])=>name==='player_page'||name.startsWith('player_'))?.[1];
+    if(String(page?.vid)!==id||String(page?.series_id)!==series)return [];
+    return addresses(page.video_player_info||{});
+  }
   const cache=new Map();
   async function videoInfo(id){
     if(!valid(id))throw Error('分集 ID 无效');const hit=cache.get(id);if(hit&&Date.now()-hit.time<240000)return hit.value;
@@ -82,5 +88,5 @@ const PhoneSource = (() => {
     }catch(_){}
     if(!rows.length)throw Error('备用接口没有可用片源');return {info:{},rows:rows.sort((a,b)=>Number(b.quality)-Number(a.quality))};
   }
-  return {videoInfo,backup,clear:id=>id?cache.delete(id):cache.clear(),sign,decode,contentKey,rowsFromModel};
+  return {videoInfo,backup,publicAddresses,clear:id=>id?cache.delete(id):cache.clear(),sign,decode,contentKey,rowsFromModel};
 })();
