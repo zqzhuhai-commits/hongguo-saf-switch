@@ -177,7 +177,9 @@ const provider = {
       try {return await publicComicPage(page);}
       catch (_) {const r=await appSearchPage('热门',19,page,24);return {items:cards(r.list),page,hasMore:r.hasMore};}
     }
-    const data = await api.categoryPage('tab=1&sort_type=1',page);
+    const keywords={human:'短剧',ai:'AI剧',drama:'剧情',ancient:'古装',comedy:'喜剧',fantasy:'奇幻'};
+    if(keywords[type]){const r=await appSearchPage(keywords[type],11,page,24);return {items:cards(r.list),page,hasMore:r.hasMore};}
+    const data = await api.categoryPage(type==='latest'?'tab=1&sort_type=2':'tab=1&sort_type=1',page);
     const section = data?.loaderData?.category_page || data?.loaderData?.['category_$'];
     const rows = section?.recommendList || section?.categoryData?.recommendList;
     if (!Array.isArray(rows)) throw new Error('首页数据结构已变化');
