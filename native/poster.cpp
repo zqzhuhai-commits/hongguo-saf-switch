@@ -40,8 +40,8 @@ PosterPixels fetchPoster(const std::string& address,const std::atomic<bool>& ali
   if(!stbi_info_from_memory(d.bytes.data(),(int)d.bytes.size(),&w,&height,&channels) || w<1 || height<1 || (int64_t)w*height>6*1024*1024)return result;
   std::unique_ptr<unsigned char,decltype(&stbi_image_free)> source(stbi_load_from_memory(d.bytes.data(),(int)d.bytes.size(),&w,&height,&channels,4),stbi_image_free);
   if(!source || !alive.load()){trace("poster:decode_failed");return result;}
-  // Decode and resize in the worker; the UI only uploads a 104x156 texture.
-  result.height=std::max(1,std::min(208,(int)std::lround(104.0*height/w)));
+  // Decode and resize in the worker; the UI only uploads a 256px-wide texture.
+  result.height=std::max(1,std::min(512,(int)std::lround(256.0*height/w)));
   result.rgba.resize(result.width*result.height*4);
   for(int y=0;y<result.height;y++)for(int x=0;x<result.width;x++) {
     const float sx=std::max(0.0f,(x+0.5f)*w/result.width-0.5f),sy=std::max(0.0f,(y+0.5f)*height/result.height-0.5f);

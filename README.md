@@ -1,4 +1,10 @@
-# 红果短剧 Switch 1.0.0 正式版
+# 红果短剧 Switch 1.1.0 测试版
+
+本次以用户提供的 Phone/TV 案例重做核心目录、搜索、详情、取流、下载和首页布局。真实视频音轨与视频轨已通过 15 秒解码测试；Switch 实机与所有剧集的可用性仍需验证。
+
+[本次修改](https://github.com/zqzhuhai-commits/hongguo-switch/pull/1) · [构建和测试](https://github.com/zqzhuhai-commits/hongguo-switch/actions)
+
+## 1.0.0 正式版历史记录
 
 [下载 NSP](https://github.com/zqzhuhai-commits/hongguo-switch/releases/download/v1.0.0/Hongguo-Switch-1.0.0.nsp) · [正式版发布说明](https://github.com/zqzhuhai-commits/hongguo-switch/releases/tag/v1.0.0)
 

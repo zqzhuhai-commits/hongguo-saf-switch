@@ -26,7 +26,7 @@ class DownloadQueue{
       if(item->cancelled){schedule(item);return;}
       if(chunk.total<=0||chunk.total>2147483647||chunk.bytes.empty()||chunk.bytes.size()>1048576||offset+(int64_t)chunk.bytes.size()>chunk.total)throw std::runtime_error("Invalid download range");
       {std::lock_guard<std::mutex> guard(mutex);if(item->state.total&&item->state.total!=chunk.total)throw std::runtime_error("Changed download");}
-      {std::fstream out(item->state.path+".part",std::ios::binary|std::ios::in|std::ios::out);out.seekp(offset);if(!out||!out.write((const char*)chunk.bytes.data(),chunk.bytes.size()))throw std::runtime_error("SD write");}
+      {std::fstream out(item->state.path+".part",std::ios::binary|std::ios::in|std::ios::out);out.seekp(offset);if(!out||!out.write((const char*)chunk.bytes.data(),chunk.bytes.size()))throw std::runtime_error("SD write");out.flush();if(!out)throw std::runtime_error("SD flush");}
       DownloadStatus done;bool finished;
       {std::lock_guard<std::mutex> guard(mutex);item->failures=0;item->state.total=chunk.total;item->state.received+=chunk.bytes.size();finished=item->state.received==chunk.total;item->state.status="下载中";done=item->state;}
       if(finished){if(std::rename((done.path+".part").c_str(),done.path.c_str())!=0)throw std::runtime_error("SD rename");{std::lock_guard<std::mutex> guard(mutex);item->state.status="已完成";done=item->state;}completed(done);}
